@@ -3,6 +3,7 @@
 from .api import API
 
 from .tracker import Tracker
+from .trackable_object import TrackableObject
 
 
 class Tractive:
@@ -13,6 +14,12 @@ class Tractive:
     async def trackers(self):
         trackers = await self._api.request(f"user/{await self._api.user_id()}/trackers")
         return [Tracker(self._api, t) for t in trackers]
+
+    async def trackable_objects(self):
+        objects = await self._api.request(
+            f"user/{await self._api.user_id()}/trackable_objects"
+        )
+        return [TrackableObject(self._api, t) for t in objects]
 
     async def close(self):
         """Close open client session."""

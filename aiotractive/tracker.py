@@ -11,7 +11,7 @@ class Tracker:
         self.version = data["_version"]
 
     def __repr__(self):
-        return f"<{self.__class__.__name__} id={self.id} type={self.type} veersion={self.version}>"
+        return f"<{self.__class__.__name__} id={self.id} type={self.type} version={self.version}>"
 
     async def hw_info(self):
         return await self._api.request(f"device_hw_report/{self.id}/")
