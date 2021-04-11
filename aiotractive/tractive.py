@@ -4,6 +4,7 @@ from .api import API
 
 from .tracker import Tracker
 from .trackable_object import TrackableObject
+from .channel import Channel
 
 
 class Tractive:
@@ -20,6 +21,9 @@ class Tractive:
             f"user/{await self._api.user_id()}/trackable_objects"
         )
         return [TrackableObject(self._api, t) for t in objects]
+
+    def channel(self):
+        return Channel(self._api)
 
     async def close(self):
         """Close open client session."""

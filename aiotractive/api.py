@@ -31,11 +31,11 @@ class API:
         self._timeout = timeout
 
         self._loop = loop or asyncio.get_event_loop()
-        self._session = session
+        self.session = session
         self._close_session = False
 
-        if self._session is None:
-            self._session = aiohttp.ClientSession(loop=self._loop)
+        if self.session is None:
+            self.session = aiohttp.ClientSession(loop=self._loop)
             self._close_session = True
 
         self._user_credentials = None
@@ -43,6 +43,10 @@ class API:
     async def user_id(self):
         await self._authenticate()
         return self._user_credentials["user_id"]
+
+    async def auth_headers(self):
+        await self._authenticate()
+        return {**self.BASE_HEADERS, **self._auth_headers}
 
     async def request(self, *args, **kwargs):
         """Perform request with error wrapping."""
@@ -59,12 +63,11 @@ class API:
 
     async def raw_request(self, uri, params=None, data=None, method="GET"):
         """Perform request."""
-        await self._authenticate()
-        async with self._session.request(
+        async with self.session.request(
             method,
             self.API_URL.join(URL(uri)).update_query(params),
             json=data,
-            headers={**self.BASE_HEADERS, **self._auth_headers},
+            headers=await self.auth_headers(),
             timeout=self._timeout,
         ) as response:
             response.raise_for_status()
@@ -81,7 +84,7 @@ class API:
         if self._user_credentials is not None:
             return self._user_credentials
 
-        async with self._session.request(
+        async with self.session.request(
             "POST",
             self.API_URL.join(URL(self.TOKEN_URI)),
             data=json.dumps(
@@ -112,5 +115,5 @@ class API:
 
     async def close(self):
         """Close the session."""
-        if self._session and self._close_session:
-            await self._session.close()
+        if self.session and self._close_session:
+            await self.session.close()
