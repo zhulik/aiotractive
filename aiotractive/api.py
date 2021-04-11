@@ -7,7 +7,7 @@ from aiohttp.client_exceptions import ClientResponseError
 from yarl import URL
 import json
 
-from .exceptions import UnauthorizedError
+from .exceptions import TractiveError, UnauthorizedError, NotFoundError
 
 
 class API:
@@ -18,9 +18,9 @@ class API:
     TOKEN_URI = "auth/token"
 
     BASE_HEADERS = {
-      "x-tractive-client": TRACTIVE_CLIENT,
-      "content-type": "application/json;charset=UTF-8",
-      "accept": "application/json, text/plain, */*",
+        "x-tractive-client": TRACTIVE_CLIENT,
+        "content-type": "application/json;charset=UTF-8",
+        "accept": "application/json, text/plain, */*",
     }
 
     def __init__(
@@ -40,8 +40,46 @@ class API:
 
         self._user_credentials = None
 
-    async def authenticate(self):
+    async def user_id(self):
+        await self._authenticate()
+        return self._user_credentials["user_id"]
+
+    async def request(self, *args, **kwargs):
+        """Perform request with error wrapping."""
+        try:
+            return await self.raw_request(*args, **kwargs)
+        except aiohttp.client_exceptions.ClientResponseError as error:
+            if error.status in [401, 403]:
+                raise UnauthorizedError from error
+            if error.status == 404:
+                raise NotFoundError from error
+            raise TractiveError from error
+        except Exception as error:
+            raise TractiveError from error
+
+    async def raw_request(self, uri, params=None, data=None, method="GET"):
+        """Perform request."""
+        await self._authenticate()
+        async with self._session.request(
+            method,
+            self.API_URL.join(URL(uri)).update_query(params),
+            json=data,
+            headers={**self.BASE_HEADERS, **self._auth_headers},
+            timeout=self._timeout,
+        ) as response:
+            response.raise_for_status()
+            if (
+                "Content-Type" in response.headers
+                and "application/json" in response.headers["Content-Type"]
+            ):
+                return await response.json()
+            return await response.read()
+
+    async def _authenticate(self):
         """Perform authenticateion."""
+        # TODO: update credentials if expired
+        if self._user_credentials is not None:
+            return self._user_credentials
 
         async with self._session.request(
             "POST",
@@ -57,16 +95,20 @@ class API:
             timeout=self._timeout,
         ) as response:
             try:
-              response.raise_for_status()
-              if (
-                  "Content-Type" in response.headers
-                  and "application/json" in response.headers["Content-Type"]
-              ):
-                  return await response.json()
-              return await response.read()
+                response.raise_for_status()
+                if (
+                    "Content-Type" in response.headers
+                    and "application/json" in response.headers["Content-Type"]
+                ):
+                    self._user_credentials = await response.json()
+                    self._auth_headers = {
+                        "x-tractive-user": self._user_credentials["user_id"],
+                        "authorization": f"Bearer {self._user_credentials['access_token']}",
+                    }
+                    return self._user_credentials
             except ClientResponseError as error:
-              if error.status in [401, 403]:
-                raise UnauthorizedError from error
+                if error.status in [401, 403]:
+                    raise UnauthorizedError from error
 
     async def close(self):
         """Close the session."""
