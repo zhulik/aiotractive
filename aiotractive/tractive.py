@@ -2,6 +2,8 @@
 
 from .api import API
 
+from .tracker import Tracker
+
 
 class Tractive:
     def __init__(self, *args, **kwargs):
@@ -9,7 +11,8 @@ class Tractive:
         self._api = API(*args, **kwargs)
 
     async def trackers(self):
-      return await self._api.request(f"user/{await self._api.user_id()}/trackers")
+        trackers = await self._api.request(f"user/{await self._api.user_id()}/trackers")
+        return [Tracker(self._api, t) for t in trackers]
 
     async def close(self):
         """Close open client session."""
