@@ -11,7 +11,7 @@ setup(
     version="0.1.0",
     author="Gleb Sinyavskiy",
     author_email="zhulik.gleb@gmail.com",
-    description="Asynchronous Python client for the Syncthing REST API",
+    description="Asynchronous Python client for the Tractive REST API",
     long_description=readme,
     long_description_content_type="text/markdown",
     url="https://github.com/zhulik/aiotractive",

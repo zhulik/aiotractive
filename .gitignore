@@ -1,7 +1,5 @@
 # local
 .idea
-syncthing/private_*
-syncthing/settings/local*
 scratch.py
 console.py
 .pypirc
