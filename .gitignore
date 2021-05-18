@@ -5,6 +5,7 @@ console.py
 .pypirc
 docs/build
 .vscode/
+requirements.txt
 
 
 # Byte-compiled / optimized / DLL files

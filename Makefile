@@ -1,19 +1,23 @@
 lint: black isort pylint flake8
 
 format:
-	pipenv run black .
-	pipenv run isort .
+	black .
+	isort .
 
 black:
-	pipenv run black --check .
+	black --check .
 
 isort:
-	pipenv run isort --check .
+	isort --check .
 
 flake8:
-	pipenv run flake8 .
+	flake8 .
 
 pylint:
-	pipenv run pylint aiotractive
+	pylint aiotractive
 
-.PHONY: black isort flake8 pylint lint format
+dist:
+	python setup.py sdist bdist_wheel
+	twine check dist/*
+
+.PHONY: black isort flake8 pylint lint format dist
