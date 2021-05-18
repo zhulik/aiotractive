@@ -12,7 +12,7 @@ from .exceptions import TractiveError, UnauthorizedError, NotFoundError
 
 class API:
     API_URL = URL("https://graph.tractive.com/3/")
-    CLIENT_ID = "5f9be055d8912eb21a4cd7ba"
+    CLIENT_ID = "5728aa1fc9077f7c32000186"
     DEFAULT_TIMEOUT = 10
 
     TOKEN_URI = "auth/token"
