@@ -6,6 +6,9 @@ from .data_object import DataObject
 class Tracker(DataObject):
     ACTIONS = {True: "on", False: "off"}
 
+    async def details(self):
+        return await self._api.request(f"tracker/{self._id}")
+
     async def hw_info(self):
         return await self._api.request(f"device_hw_report/{self._id}/")
 
