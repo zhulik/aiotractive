@@ -1,1 +1,1 @@
-from .tractive import Tractive
+from .tractive import Tractive  # noqa
