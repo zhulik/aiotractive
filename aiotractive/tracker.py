@@ -4,8 +4,6 @@ from .data_object import DataObject
 
 
 class Tracker(DataObject):
-    DEFAULT_PERIOD_HOURS = 6
-
     ACTIONS = {True: "on", False: "off"}
 
     async def hw_info(self):

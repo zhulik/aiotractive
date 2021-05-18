@@ -22,8 +22,8 @@ class Tractive:
         )
         return [TrackableObject(self._api, t) for t in objects]
 
-    def channel(self):
-        return Channel(self._api)
+    def events(self):
+        return Channel(self._api).listen()
 
     async def close(self):
         """Close open client session."""
