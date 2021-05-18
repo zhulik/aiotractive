@@ -22,6 +22,11 @@ class Tracker(DataObject):
             },
         )
 
+    async def pos_report(self):
+        return await self._api.request(
+            f"device_pos_report/{self._id}",
+        )
+
     async def set_buzzer_active(self, active):
         action = self.ACTIONS[active]
 
