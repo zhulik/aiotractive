@@ -1,10 +1,9 @@
 """Entrypoint for the Tractive REST API."""
 
 from .api import API
-
-from .tracker import Tracker
-from .trackable_object import TrackableObject
 from .channel import Channel
+from .trackable_object import TrackableObject
+from .tracker import Tracker
 
 
 class Tractive:
@@ -17,9 +16,7 @@ class Tractive:
         return [Tracker(self._api, t) for t in trackers]
 
     async def trackable_objects(self):
-        objects = await self._api.request(
-            f"user/{await self._api.user_id()}/trackable_objects"
-        )
+        objects = await self._api.request(f"user/{await self._api.user_id()}/trackable_objects")
         return [TrackableObject(self._api, t) for t in objects]
 
     def events(self):

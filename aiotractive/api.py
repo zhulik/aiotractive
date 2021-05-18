@@ -1,13 +1,13 @@
 """Low level client for the Tractive REST API."""
 
 import asyncio
-import aiohttp
-from aiohttp.client_exceptions import ClientResponseError
-
-from yarl import URL
 import json
 
-from .exceptions import TractiveError, UnauthorizedError, NotFoundError
+import aiohttp
+from aiohttp.client_exceptions import ClientResponseError
+from yarl import URL
+
+from .exceptions import NotFoundError, TractiveError, UnauthorizedError
 
 
 class API:
@@ -23,22 +23,23 @@ class API:
         "accept": "application/json, text/plain, */*",
     }
 
-    def __init__(
+    def __init__(  # pylint: disable=too-many-arguments
         self, login, password, timeout=DEFAULT_TIMEOUT, loop=None, session=None
     ):
         self._login = login
         self._password = password
         self._timeout = timeout
 
-        self._loop = loop or asyncio.get_event_loop()
         self.session = session
         self._close_session = False
 
         if self.session is None:
-            self.session = aiohttp.ClientSession(loop=self._loop)
+            loop = loop or asyncio.get_event_loop()
+            self.session = aiohttp.ClientSession(loop=loop)
             self._close_session = True
 
         self._user_credentials = None
+        self._auth_headers = None
 
     async def user_id(self):
         await self._authenticate()
@@ -71,10 +72,7 @@ class API:
             timeout=self._timeout,
         ) as response:
             response.raise_for_status()
-            if (
-                "Content-Type" in response.headers
-                and "application/json" in response.headers["Content-Type"]
-            ):
+            if "Content-Type" in response.headers and "application/json" in response.headers["Content-Type"]:
                 return await response.json()
             return await response.read()
 
@@ -99,10 +97,7 @@ class API:
         ) as response:
             try:
                 response.raise_for_status()
-                if (
-                    "Content-Type" in response.headers
-                    and "application/json" in response.headers["Content-Type"]
-                ):
+                if "Content-Type" in response.headers and "application/json" in response.headers["Content-Type"]:
                     self._user_credentials = await response.json()
                     self._auth_headers = {
                         "x-tractive-user": self._user_credentials["user_id"],

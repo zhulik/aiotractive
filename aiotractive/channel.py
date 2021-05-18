@@ -1,6 +1,5 @@
 import json
-
-from asyncio.exceptions import TimeoutError
+from asyncio.exceptions import TimeoutError as AIOTimeoutError
 
 
 class Channel:
@@ -21,5 +20,5 @@ class Channel:
                         if event["message"] in self.IGNORE_MESSAGES:
                             continue
                         yield event
-            except TimeoutError:
+            except AIOTimeoutError:
                 continue
