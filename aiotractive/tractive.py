@@ -15,6 +15,9 @@ class Tractive:
         trackers = await self._api.request(f"user/{await self._api.user_id()}/trackers")
         return [Tracker(self._api, t) for t in trackers]
 
+    async def tracker(self, tracker_id):
+        return await Tracker(self._api, {"_id": tracker_id, "_type": "tracker"}).details()
+
     async def trackable_objects(self):
         objects = await self._api.request(f"user/{await self._api.user_id()}/trackable_objects")
         return [TrackableObject(self._api, t) for t in objects]
