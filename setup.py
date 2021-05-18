@@ -8,7 +8,7 @@ with open("README.md", "r") as f:
 
 setup(
     name="aiotractive",
-    version="0.1.1",
+    version="0.2.0",
     author="Gleb Sinyavskiy",
     author_email="zhulik.gleb@gmail.com",
     description="Asynchronous Python client for the Tractive REST API",
