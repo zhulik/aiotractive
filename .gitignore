@@ -6,6 +6,7 @@ console.py
 docs/build
 .vscode/
 requirements.txt
+event_examples/
 
 
 # Byte-compiled / optimized / DLL files
