@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import time
 
 import aiohttp
 from aiohttp.client_exceptions import ClientResponseError
@@ -78,7 +79,10 @@ class API:
 
     async def authenticate(self):
         """Perform authenticateion."""
-        # TODO: update credentials if expired
+        if self._user_credentials is not None and self._user_credentials["expires_at"] - time.time() < 3600:
+            self._user_credentials = None
+            self._auth_headers = None
+
         if self._user_credentials is not None:
             return self._user_credentials
 
