@@ -42,11 +42,11 @@ class API:
         self._auth_headers = None
 
     async def user_id(self):
-        await self._authenticate()
+        await self.authenticate()
         return self._user_credentials["user_id"]
 
     async def auth_headers(self):
-        await self._authenticate()
+        await self.authenticate()
         return {**self.BASE_HEADERS, **self._auth_headers}
 
     async def request(self, *args, **kwargs):
@@ -76,7 +76,7 @@ class API:
                 return await response.json()
             return await response.read()
 
-    async def _authenticate(self):
+    async def authenticate(self):
         """Perform authenticateion."""
         # TODO: update credentials if expired
         if self._user_credentials is not None:

@@ -11,6 +11,9 @@ class Tractive:
         """Initialize the client."""
         self._api = API(*args, **kwargs)
 
+    async def authenticate(self):
+        return await self._api.authenticate()
+
     async def trackers(self):
         trackers = await self._api.request(f"user/{await self._api.user_id()}/trackers")
         return [Tracker(self._api, t) for t in trackers]
