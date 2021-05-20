@@ -3,7 +3,7 @@ import json
 import time
 from asyncio.exceptions import TimeoutError as AIOTimeoutError
 
-from .exceptions import DisconnectedError
+from .exceptions import DisconnectedError, TractiveError
 
 
 class Channel:
@@ -34,7 +34,7 @@ class Channel:
                 self._check_connection_task.cancel()
 
                 await self._check_connection_task
-                raise event["error"]
+                raise TractiveError() from event["error"]
 
             if event["type"] == "cancelled":
                 self._listen_task.cancel()
