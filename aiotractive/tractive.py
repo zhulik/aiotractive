@@ -22,8 +22,9 @@ class Tractive:
         objects = await self._api.request(f"user/{await self._api.user_id()}/trackable_objects")
         return [TrackableObject(self._api, t) for t in objects]
 
-    def events(self):
-        return Channel(self._api).listen()
+    async def events(self):
+        async for event in Channel(self._api).listen():
+            yield event
 
     async def close(self):
         """Close open client session."""
