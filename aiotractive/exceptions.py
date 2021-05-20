@@ -11,3 +11,7 @@ class UnauthorizedError(TractiveError):
 
 class NotFoundError(TractiveError):
     """When the server responds with 404."""
+
+
+class DisconnectedError(TractiveError):
+    """Channel disconnected"""
