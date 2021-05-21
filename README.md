@@ -10,7 +10,7 @@ This project is a result of reverse engineering of the Tractive web app.
 
 Inspired by [home_assistant_tractive](https://github.com/Danielhiversen/home_assistant_tractive).
 
-Initially some code was borrowed from home_assistant_tractive, but in the end all of it was replaced with my own implementation.
+Initially some code was borrowed from home_assistant_tractive, but in the end all of it was replaced with my own implementations.
 
 The package is in active development. **Not all features available in the Tractive web app are implemented.**
 
@@ -99,7 +99,7 @@ async for event in client.events():
 
 ```
 
-After connecting you will immidiately receive one `tracker_status` event per owned tracker.
+After connecting you will immediately receive one `tracker_status` event per owned tracker.
 The first event always includes full current status of the tracker including current position, battery level, states of the buzzer, the LED and the live tracking.
 
 All following events will have the same name, but will only include one of these: either a position, battery info, or a buzzer/LED/live status.
