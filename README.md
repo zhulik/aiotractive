@@ -100,10 +100,11 @@ async for event in client.events():
 ```
 
 After connecting you will immediately receive one `tracker_status` event per owned tracker.
-The first event always includes full current status of the tracker including current position, battery level, states of the buzzer, the LED and the live tracking.
+The first event always includes full current status of the tracker including current position, battery level, states of the buzzer,
+the LED and the live tracking.
 
-All following events will have the same name, but will only include one of these: either a position, battery info, or a buzzer/LED/live status.
-
+All following events will have the same name, but only include one of these: either a position, battery info, or a buzzer/LED/live
+status.
 
 ## Contribution
 You know;)
