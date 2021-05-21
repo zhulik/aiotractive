@@ -12,16 +12,6 @@ class Tracker(DataObject):
     async def hw_info(self):
         return await self._api.request(f"device_hw_report/{self._id}/")
 
-    async def positions(self, time_from=datetime.now() - timedelta(hours=6), time_to=datetime.now()):
-        return await self._api.request(
-            f"tracker/{self._id}/positions",
-            params={
-                "time_from": round(time_from.timestamp()),
-                "time_to": round(time_to.timestamp()),
-                "format": "json_segments",
-            },
-        )
-
     async def pos_report(self):
         return await self._api.request(
             f"device_pos_report/{self._id}",
