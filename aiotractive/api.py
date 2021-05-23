@@ -10,25 +10,28 @@ from yarl import URL
 
 from .exceptions import NotFoundError, TractiveError, UnauthorizedError
 
+CLIENT_ID = "5728aa1fc9077f7c32000186"
 
-class API:
+
+class API:  # pylint: disable=too-many-instance-attributes
     API_URL = URL("https://graph.tractive.com/3/")
-    CLIENT_ID = "5728aa1fc9077f7c32000186"
+
     DEFAULT_TIMEOUT = 10
 
     TOKEN_URI = "auth/token"
 
-    BASE_HEADERS = {
-        "x-tractive-client": CLIENT_ID,
-        "content-type": "application/json;charset=UTF-8",
-        "accept": "application/json, text/plain, */*",
-    }
-
     def __init__(  # pylint: disable=too-many-arguments
-        self, login, password, timeout=DEFAULT_TIMEOUT, loop=None, session=None
+        self,
+        login,
+        password,
+        client_id=CLIENT_ID,
+        timeout=DEFAULT_TIMEOUT,
+        loop=None,
+        session=None,
     ):
         self._login = login
         self._password = password
+        self._client_id = client_id
         self._timeout = timeout
 
         self.session = session
@@ -48,7 +51,7 @@ class API:
 
     async def auth_headers(self):
         await self.authenticate()
-        return {**self.BASE_HEADERS, **self._auth_headers}
+        return {**self.base_headers(), **self._auth_headers}
 
     async def request(self, *args, **kwargs):
         """Perform request with error wrapping."""
@@ -97,7 +100,7 @@ class API:
                         "grant_type": "tractive",
                     }
                 ),
-                headers=self.BASE_HEADERS,
+                headers=self.base_headers(),
                 timeout=self._timeout,
             ) as response:
                 try:
@@ -121,3 +124,10 @@ class API:
         """Close the session."""
         if self.session and self._close_session:
             await self.session.close()
+
+    def base_headers(self):
+        return {
+            "x-tractive-client": self._client_id,
+            "content-type": "application/json;charset=UTF-8",
+            "accept": "application/json, text/plain, */*",
+        }
