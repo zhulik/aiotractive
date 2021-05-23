@@ -12,15 +12,22 @@ from .exceptions import NotFoundError, TractiveError, UnauthorizedError
 
 CLIENT_ID = "5728aa1fc9077f7c32000186"
 
-class API:
+
+class API:  # pylint: disable=too-many-instance-attributes
     API_URL = URL("https://graph.tractive.com/3/")
-    
+
     DEFAULT_TIMEOUT = 10
 
     TOKEN_URI = "auth/token"
 
     def __init__(  # pylint: disable=too-many-arguments
-        self, login, password, client_id=CLIENT_ID, timeout=DEFAULT_TIMEOUT, loop=None, session=None
+        self,
+        login,
+        password,
+        client_id=CLIENT_ID,
+        timeout=DEFAULT_TIMEOUT,
+        loop=None,
+        session=None,
     ):
         self._login = login
         self._password = password
