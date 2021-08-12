@@ -117,6 +117,8 @@ class API:  # pylint: disable=too-many-instance-attributes
                         raise UnauthorizedError from error
                 except Exception as error:
                     raise TractiveError from error
+        except TractiveError as error:
+            raise error
         except Exception as error:
             raise TractiveError from error
 
