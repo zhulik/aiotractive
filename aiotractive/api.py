@@ -114,6 +114,7 @@ class API:  # pylint: disable=too-many-instance-attributes
         except ClientResponseError as error:
             if error.status in [401, 403]:
                 raise UnauthorizedError from error
+            raise TractiveError from error
         except Exception as error:
             raise TractiveError from error
 
