@@ -103,22 +103,18 @@ class API:  # pylint: disable=too-many-instance-attributes
                 headers=self.base_headers(),
                 timeout=self._timeout,
             ) as response:
-                try:
-                    response.raise_for_status()
-                    if "Content-Type" in response.headers and "application/json" in response.headers["Content-Type"]:
-                        self._user_credentials = await response.json()
-                        self._auth_headers = {
-                            "x-tractive-user": self._user_credentials["user_id"],
-                            "authorization": f"Bearer {self._user_credentials['access_token']}",
-                        }
-                        return self._user_credentials
-                except ClientResponseError as error:
-                    if error.status in [401, 403]:
-                        raise UnauthorizedError from error
-                except Exception as error:
-                    raise TractiveError from error
-        except TractiveError as error:
-            raise error
+                response.raise_for_status()
+                if "Content-Type" in response.headers and "application/json" in response.headers["Content-Type"]:
+                    self._user_credentials = await response.json()
+                    self._auth_headers = {
+                        "x-tractive-user": self._user_credentials["user_id"],
+                        "authorization": f"Bearer {self._user_credentials['access_token']}",
+                    }
+                    return self._user_credentials
+        except ClientResponseError as error:
+            if error.status in [401, 403]:
+                raise UnauthorizedError from error
+            raise TractiveError from error
         except Exception as error:
             raise TractiveError from error
 
