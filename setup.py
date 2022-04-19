@@ -8,7 +8,7 @@ with open("README.md", "r") as f:
 
 setup(
     name="aiotractive",
-    version="0.5.3",
+    version="0.5.4",
     author="Gleb Sinyavskiy",
     author_email="zhulik.gleb@gmail.com",
     description="Asynchronous Python client for the Tractive REST API",
@@ -16,7 +16,7 @@ setup(
     long_description_content_type="text/markdown",
     url="https://github.com/zhulik/aiotractive",
     license="The MIT License",
-    install_requires=["aiohttp>=3.7.4", "yarl>=1.6.3"],
+    install_requires=["aiohttp>=3.8.1", "yarl>=1.7.2"],
     packages=["aiotractive"],
     package_dir={"aiotractive": "aiotractive"},
     include_package_data=True,
