@@ -10,8 +10,7 @@ from yarl import URL
 
 from .exceptions import NotFoundError, TractiveError, UnauthorizedError
 
-CLIENT_ID = "5728aa1fc9077f7c32000186"
-
+CLIENT_ID = "625e533dc3c3b41c28a669f0"
 
 class API:  # pylint: disable=too-many-instance-attributes
     API_URL = URL("https://graph.tractive.com/3/")
