@@ -39,7 +39,7 @@ class API:  # pylint: disable=too-many-instance-attributes
 
         if self.session is None:
             loop = loop or asyncio.get_event_loop()
-            self.session = aiohttp.ClientSession(loop=loop)
+            self.session = aiohttp.ClientSession()
             self._close_session = True
 
         self._user_credentials = None
