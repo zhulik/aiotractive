@@ -39,7 +39,7 @@ class API:  # pylint: disable=too-many-instance-attributes
 
         if self.session is None:
             loop = loop or asyncio.get_event_loop()
-            self.session = aiohttp.ClientSession()
+            self.session = aiohttp.ClientSession(raise_for_status=True)
             self._close_session = True
 
         self._user_credentials = None
@@ -57,7 +57,7 @@ class API:  # pylint: disable=too-many-instance-attributes
         """Perform request with error wrapping."""
         try:
             return await self.raw_request(*args, **kwargs)
-        except aiohttp.client_exceptions.ClientResponseError as error:
+        except ClientResponseError as error:
             if error.status in [401, 403]:
                 raise UnauthorizedError from error
             if error.status == 404:
@@ -75,7 +75,6 @@ class API:  # pylint: disable=too-many-instance-attributes
             headers=await self.auth_headers(),
             timeout=self._timeout,
         ) as response:
-            response.raise_for_status()
             if "Content-Type" in response.headers and "application/json" in response.headers["Content-Type"]:
                 return await response.json()
             return await response.read()
@@ -103,7 +102,6 @@ class API:  # pylint: disable=too-many-instance-attributes
                 headers=self.base_headers(),
                 timeout=self._timeout,
             ) as response:
-                response.raise_for_status()
                 if "Content-Type" in response.headers and "application/json" in response.headers["Content-Type"]:
                     self._user_credentials = await response.json()
                     self._auth_headers = {
