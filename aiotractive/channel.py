@@ -51,10 +51,7 @@ class Channel:
         while True:
             try:
                 async with self._api.session.request(
-                    "POST",
-                    self.CHANNEL_URL,
-                    headers=await self._api.auth_headers(),
-                    timeout=3,
+                    "POST", self.CHANNEL_URL, headers=await self._api.auth_headers()
                 ) as response:
                     async for data, _ in response.content.iter_chunks():
                         event = json.loads(data)
