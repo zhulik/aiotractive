@@ -1,9 +1,14 @@
 import asyncio
 import json
 import time
+
+import ssl
+
 from asyncio.exceptions import TimeoutError as AIOTimeoutError
 
-from .exceptions import DisconnectedError, TractiveError
+from aiohttp.client_exceptions import ClientResponseError
+
+from .exceptions import DisconnectedError, TractiveError, UnauthorizedError
 
 
 class Channel:
@@ -32,9 +37,12 @@ class Channel:
 
             if event["type"] == "error":
                 self._check_connection_task.cancel()
-
                 await self._check_connection_task
-                raise TractiveError() from event["error"]
+
+                self._listen_task.cancel()
+                await self._listen_task
+
+                raise event["error"]
 
             if event["type"] == "cancelled":
                 self._listen_task.cancel()
@@ -49,6 +57,7 @@ class Channel:
                     "POST",
                     self.CHANNEL_URL,
                     headers=await self._api.auth_headers(),
+                    timeout=3,
                 ) as response:
                     async for data, _ in response.content.iter_chunks():
                         event = json.loads(data)
@@ -60,12 +69,25 @@ class Channel:
                         await self._queue.put({"type": "event", "event": event})
             except AIOTimeoutError:
                 continue
+            except ClientResponseError as error:
+                try:
+                    if error.status in [401, 403]:
+                        raise UnauthorizedError from error
+                    raise TractiveError from error
+                except TractiveError as error:
+                    await self._queue.put({"type": "error", "error": error})
+                    return
+
             except asyncio.CancelledError as error:
                 await self._queue.put({"type": "cancelled", "error": error})
                 return
+
             except Exception as error:  # pylint: disable=broad-except
-                await self._queue.put({"type": "error", "error": error})
-                return
+                try:
+                    raise TractiveError from error
+                except TractiveError as error:
+                    await self._queue.put({"type": "error", "error": error})
+                    return
 
     async def _check_connection(self):
         try:
