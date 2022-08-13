@@ -1,9 +1,6 @@
 import asyncio
 import json
 import time
-
-import ssl
-
 from asyncio.exceptions import TimeoutError as AIOTimeoutError
 
 from aiohttp.client_exceptions import ClientResponseError
