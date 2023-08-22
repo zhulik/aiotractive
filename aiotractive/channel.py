@@ -12,8 +12,8 @@ class Channel:
     CHANNEL_URL = "https://channel.tractive.com/3/channel"
     IGNORE_MESSAGES = ["handshake", "keep-alive"]
 
-    KEEP_ALIVE_TIMEOUT = 7  # seconds
-    CHECK_CONNECTION_TIME = 4  # seconds
+    KEEP_ALIVE_TIMEOUT = 60  # seconds
+    CHECK_CONNECTION_TIME = 5  # seconds
 
     def __init__(self, api):
         self._api = api
