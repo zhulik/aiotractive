@@ -53,7 +53,7 @@ class Channel:
                 async with self._api.session.request(
                     "POST", self.CHANNEL_URL, headers=await self._api.auth_headers()
                 ) as response:
-                    async for data, _ in response.content.iter_chunks():
+                    async for data in response.content:
                         event = json.loads(data)
                         if event["message"] == "keep-alive":
                             self._last_keep_alive = time.time()
