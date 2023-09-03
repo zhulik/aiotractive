@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import logging
 import time
 
 import aiohttp
@@ -11,6 +12,9 @@ from yarl import URL
 from .exceptions import NotFoundError, TractiveError, UnauthorizedError
 
 CLIENT_ID = "625e533dc3c3b41c28a669f0"
+LIMIT_EXCEEDED_SLEEP = 3
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class API:  # pylint: disable=too-many-instance-attributes
@@ -75,6 +79,11 @@ class API:  # pylint: disable=too-many-instance-attributes
             headers=await self.auth_headers(),
             timeout=self._timeout,
         ) as response:
+            _LOGGER.debug("Request %s, status: %s", response.url, response.status)
+            if response.status == 429:
+                _LOGGER.info("Rate limit exceeded, retrying in %s second", LIMIT_EXCEEDED_SLEEP)
+                await asyncio.sleep(LIMIT_EXCEEDED_SLEEP)
+                return await self.raw_request(uri, params, data, method)
             if "Content-Type" in response.headers and "application/json" in response.headers["Content-Type"]:
                 return await response.json()
             return await response.read()
