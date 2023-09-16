@@ -13,7 +13,6 @@ from yarl import URL
 from .exceptions import NotFoundError, TractiveError, UnauthorizedError
 
 CLIENT_ID = "625e533dc3c3b41c28a669f0"
-LIMIT_EXCEEDED_SLEEP = 3
 
 _LOGGER = logging.getLogger(__name__)
 
