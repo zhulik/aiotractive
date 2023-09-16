@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+import random
 import time
 
 import aiohttp
@@ -32,6 +33,7 @@ class API:  # pylint: disable=too-many-instance-attributes
         timeout=DEFAULT_TIMEOUT,
         loop=None,
         session=None,
+        retry_count=3,
     ):
         self._login = login
         self._password = password
@@ -48,6 +50,9 @@ class API:  # pylint: disable=too-many-instance-attributes
 
         self._user_credentials = None
         self._auth_headers = None
+
+        self._retry_count = retry_count
+        self._attempt = 0
 
     async def user_id(self):
         await self.authenticate()
@@ -72,6 +77,8 @@ class API:  # pylint: disable=too-many-instance-attributes
 
     async def raw_request(self, uri, params=None, data=None, method="GET"):
         """Perform request."""
+        self._attempt += 1
+
         async with self.session.request(
             method,
             self.API_URL.join(URL(uri)).update_query(params),
@@ -80,10 +87,17 @@ class API:  # pylint: disable=too-many-instance-attributes
             timeout=self._timeout,
         ) as response:
             _LOGGER.debug("Request %s, status: %s", response.url, response.status)
+
             if response.status == 429:
-                _LOGGER.info("Rate limit exceeded, retrying in %s second", LIMIT_EXCEEDED_SLEEP)
-                await asyncio.sleep(LIMIT_EXCEEDED_SLEEP)
-                return await self.raw_request(uri, params, data, method)
+                if self._attempt <= self._retry_count:
+                    delay = self._attempt**2 + random.uniform(0, 3)
+                    _LOGGER.info("Request limit exceeded, retrying in %s second", delay)
+                    await asyncio.sleep(delay)
+                    return await self.raw_request(uri, params, data, method)
+                raise TractiveError("Request limit exceeded")
+
+            self._attempt = 0
+
             if "Content-Type" in response.headers and "application/json" in response.headers["Content-Type"]:
                 return await response.json()
             return await response.read()
