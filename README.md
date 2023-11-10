@@ -71,6 +71,15 @@ await tracker.hw_info() # Includes battery level, firmware version, model and so
 await tracker.pos_report() # Includes coordinates, latitude, speed and so on
 # Retrieve hardware info
 
+# Retrive history positions
+```python
+now = datetime.timestamp(datetime.now())
+time_from = now - 3600 * LAST_HOURS
+time_to = now
+format = json_segments
+await tracker.positions(time_from, time_to, format):
+```
+
 # Control the buzzer
 await set_buzzer_active(True) # or False
 
