@@ -1,7 +1,9 @@
 ---
 name: Continuous Integration
 
-on: [push]
+on:
+  - push
+  - pull_request
 
 jobs:
   test:
@@ -29,6 +31,7 @@ jobs:
 
       - name: Run linters
         run: pipenv run make
+
   publish:
     name: Publish a Python distribution to PyPI
     runs-on: ubuntu-latest
