@@ -15,6 +15,15 @@ class Tracker(DataObject):
             f"device_pos_report/{self._id}",
         )
 
+    async def positions(self, time_from, time_to, format):
+        url = f"tracker/{self._id}/positions"
+        params = {
+            "time_from": time_from,
+            "time_to": time_to,
+            "format": format,
+        }
+        return await self._api.request(url, params=params)
+
     async def set_buzzer_active(self, active):
         action = self.ACTIONS[active]
 
