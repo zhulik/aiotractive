@@ -15,12 +15,12 @@ class Tracker(DataObject):
             f"device_pos_report/{self._id}",
         )
 
-    async def positions(self, time_from, time_to, format):
+    async def positions(self, time_from, time_to, fmt):
         url = f"tracker/{self._id}/positions"
         params = {
             "time_from": time_from,
             "time_to": time_to,
-            "format": format,
+            "format": fmt,
         }
         return await self._api.request(url, params=params)
 
