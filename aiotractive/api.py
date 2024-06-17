@@ -98,8 +98,6 @@ class API:  # pylint: disable=too-many-instance-attributes
                     )
                 raise TractiveError("Request limit exceeded")
 
-            self._attempt = 0
-
             if "Content-Type" in response.headers and "application/json" in response.headers["Content-Type"]:
                 return await response.json()
             return await response.read()
