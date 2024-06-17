@@ -33,6 +33,7 @@ class API:  # pylint: disable=too-many-instance-attributes
         loop=None,
         session=None,
         retry_count=3,
+        retry_delay=lambda attempt: (attempt + 1) ** 2 + random.uniform(0, 3),
     ):
         self._login = login
         self._password = password
@@ -51,7 +52,7 @@ class API:  # pylint: disable=too-many-instance-attributes
         self._auth_headers = None
 
         self._retry_count = retry_count
-        self._attempt = 0
+        self._retry_delay = retry_delay
 
     async def user_id(self):
         await self.authenticate()
@@ -74,10 +75,10 @@ class API:  # pylint: disable=too-many-instance-attributes
         except Exception as error:
             raise TractiveError from error
 
-    async def raw_request(self, uri, params=None, data=None, method="GET"):
+    async def raw_request(
+        self, uri, params=None, data=None, method="GET", attempt: int = 1
+    ):
         """Perform request."""
-        self._attempt += 1
-
         async with self.session.request(
             method,
             self.API_URL.join(URL(uri)).update_query(params),
@@ -88,11 +89,13 @@ class API:  # pylint: disable=too-many-instance-attributes
             _LOGGER.debug("Request %s, status: %s", response.url, response.status)
 
             if response.status == 429:
-                if self._attempt <= self._retry_count:
-                    delay = self._attempt**2 + random.uniform(0, 3)
+                if attempt <= self._retry_count:
+                    delay = self._retry_delay(attempt)
                     _LOGGER.info("Request limit exceeded, retrying in %s second", delay)
                     await asyncio.sleep(delay)
-                    return await self.raw_request(uri, params, data, method)
+                    return await self.raw_request(
+                        uri, params, data, method, attempt=attempt + 1
+                    )
                 raise TractiveError("Request limit exceeded")
 
             self._attempt = 0
