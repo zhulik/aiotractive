@@ -75,9 +75,7 @@ class API:  # pylint: disable=too-many-instance-attributes
         except Exception as error:
             raise TractiveError from error
 
-    async def raw_request(
-        self, uri, params=None, data=None, method="GET", attempt: int = 1
-    ):
+    async def raw_request(self, uri, params=None, data=None, method="GET", attempt: int = 1):
         """Perform request."""
         async with self.session.request(
             method,
@@ -93,9 +91,7 @@ class API:  # pylint: disable=too-many-instance-attributes
                     delay = self._retry_delay(attempt)
                     _LOGGER.info("Request limit exceeded, retrying in %s second", delay)
                     await asyncio.sleep(delay)
-                    return await self.raw_request(
-                        uri, params, data, method, attempt=attempt + 1
-                    )
+                    return await self.raw_request(uri, params, data, method, attempt=attempt + 1)
                 raise TractiveError("Request limit exceeded")
 
             if "Content-Type" in response.headers and "application/json" in response.headers["Content-Type"]:
