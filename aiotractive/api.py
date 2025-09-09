@@ -5,7 +5,7 @@ import logging
 import random
 
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from typing import Any, Final
 
 from aiohttp import ClientSession, ClientTimeout
@@ -67,6 +67,21 @@ class API:
             raise TractiveError from error
         except Exception as error:
             raise TractiveError from error
+
+    async def bulk_post(self, items: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
+        """
+        Low-level POST to /3/bulk?schema=flat&partial=true
+        Returns the JSON list that Tractive sends back.
+        """
+
+        return await self.request(
+            "bulk",
+            method="POST",
+            params={"schema": "flat", "partial": "false"},
+            data=list(items),  # Tractive wants a JSON array
+            api_version="3",
+        )
+
 
     async def raw_request(
         self,
