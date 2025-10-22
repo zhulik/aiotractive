@@ -26,7 +26,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install --upgrade pipenv wheel setuptools
+          pip install pipenv
           pipenv sync --dev
 
       - name: Run linters
