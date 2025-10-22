@@ -4,7 +4,7 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-aiohttp=">=3.9.4<4"
+aiohttp=">=3.9.5<4"
 yarl=">=1.7.2"
 aiotractive = {editable = true, path = "."}
 
