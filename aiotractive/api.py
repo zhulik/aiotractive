@@ -18,7 +18,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class API:  # pylint: disable=too-many-instance-attributes
-    API_URL = URL("https://graph.tractive.com/3/")
+    API_URL = URL("https://graph.tractive.com/4/")
 
     DEFAULT_TIMEOUT = 10
 
