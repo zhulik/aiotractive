@@ -33,7 +33,7 @@ class API:  # pylint: disable=too-many-instance-attributes
         loop=None,
         session=None,
         retry_count=3,
-        retry_delay=lambda attempt: 3**attempt + random.uniform(0, 3),
+        retry_delay=lambda attempt: 4**attempt + random.uniform(0, 3),
     ):
         self._login = login
         self._password = password
