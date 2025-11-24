@@ -13,8 +13,9 @@ jobs=0
 disable=missing-function-docstring,
         missing-module-docstring,
         missing-class-docstring,
-        no-self-use,
-        not-callable
+        not-callable,
+        redefined-outer-name,
+        too-many-positional-arguments
 
 
 [REFACTORING]

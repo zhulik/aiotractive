@@ -15,9 +15,11 @@ flake8=">=3.9.2"
 black=">=21.5b1"
 twine="3.4.1"
 wheel=">=0.36.2"
+typing_extensions=">=4.10.0"
+tomli=">=2.1.0"
 
 [requires]
-python_version = "3.9"
+python_version = "3.10"
 
 [pipenv]
 allow_prereleases = true
