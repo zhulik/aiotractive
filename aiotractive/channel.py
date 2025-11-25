@@ -52,10 +52,12 @@ class Channel:
         while True:
             try:
                 async with self._api.session.request(
-                        "POST", self.CHANNEL_URL,
-                        headers=await self._api.auth_headers(),
-                        timeout=aiohttp.ClientTimeout(total=None, connect=10, sock_connect=10, sock_read=None,
-                                                      ceil_threshold=5)
+                    "POST",
+                    self.CHANNEL_URL,
+                    headers=await self._api.auth_headers(),
+                    timeout=aiohttp.ClientTimeout(
+                        total=None, connect=10, sock_connect=10, sock_read=None, ceil_threshold=5
+                    ),
                 ) as response:
                     async for data in response.content:
                         event = json.loads(data)
