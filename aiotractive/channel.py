@@ -3,6 +3,7 @@ import json
 import time
 from asyncio.exceptions import TimeoutError as AIOTimeoutError
 
+import aiohttp
 from aiohttp.client_exceptions import ClientResponseError
 
 from .exceptions import DisconnectedError, TractiveError, UnauthorizedError
@@ -51,7 +52,12 @@ class Channel:
         while True:
             try:
                 async with self._api.session.request(
-                    "POST", self.CHANNEL_URL, headers=await self._api.auth_headers()
+                    "POST",
+                    self.CHANNEL_URL,
+                    headers=await self._api.auth_headers(),
+                    timeout=aiohttp.ClientTimeout(
+                        total=None, connect=10, sock_connect=10, sock_read=None, ceil_threshold=5
+                    ),
                 ) as response:
                     async for data in response.content:
                         event = json.loads(data)
