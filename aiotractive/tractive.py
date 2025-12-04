@@ -21,6 +21,9 @@ class Tractive:
     def tracker(self, tracker_id):
         return Tracker(self._api, {"_id": tracker_id, "_type": "tracker"})
 
+    def trackable_object(self, trackable_id):
+        return TrackableObject(self._api, {"_id": trackable_id, "_type": "pet"})
+
     async def trackable_objects(self):
         objects = await self._api.request(f"user/{await self._api.user_id()}/trackable_objects")
         return [TrackableObject(self._api, t) for t in objects]
