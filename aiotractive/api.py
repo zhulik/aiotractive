@@ -76,26 +76,10 @@ class API:  # pylint: disable=too-many-instance-attributes
         except Exception as error:
             raise TractiveError from error
 
-    async def aps_request(self, *args, **kwargs):
-        """Perform request to APS API with error wrapping."""
-        try:
-            return await self.raw_request(*args, base_url=self.APS_API_URL, **kwargs)
-        except ClientResponseError as error:
-            if error.status in [401, 403]:
-                raise UnauthorizedError from error
-            if error.status == 404:
-                raise NotFoundError from error
-            raise TractiveError from error
-        except Exception as error:
-            raise TractiveError from error
-
     async def raw_request(  # pylint: disable=too-many-arguments
-        self, uri, params=None, data=None, method="GET", attempt: int = 1, base_url=None
+        self, uri, params=None, data=None, method="GET", attempt: int = 1, base_url=API_URL
     ):
         """Perform request."""
-        if base_url is None:
-            base_url = self.API_URL
-        
         async with self.session.request(
             method,
             base_url.join(URL(uri)).update_query(params),
