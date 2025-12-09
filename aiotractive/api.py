@@ -19,6 +19,7 @@ _LOGGER = logging.getLogger(__name__)
 
 class API:  # pylint: disable=too-many-instance-attributes
     API_URL = URL("https://graph.tractive.com/3/")
+    APS_API_URL = URL("https://aps-api.tractive.com/api/1/")
 
     DEFAULT_TIMEOUT = 10
 
@@ -76,12 +77,12 @@ class API:  # pylint: disable=too-many-instance-attributes
             raise TractiveError from error
 
     async def raw_request(  # pylint: disable=too-many-arguments
-        self, uri, params=None, data=None, method="GET", attempt: int = 1
+        self, uri, params=None, data=None, method="GET", attempt: int = 1, base_url=API_URL
     ):
         """Perform request."""
         async with self.session.request(
             method,
-            self.API_URL.join(URL(uri)).update_query(params),
+            base_url.join(URL(uri)).update_query(params),
             json=data,
             headers=await self.auth_headers(),
             timeout=self._timeout,
@@ -93,7 +94,7 @@ class API:  # pylint: disable=too-many-instance-attributes
                     delay = self._retry_delay(attempt)
                     _LOGGER.info("Request limit exceeded, retrying in %s second", delay)
                     await asyncio.sleep(delay)
-                    return await self.raw_request(uri, params, data, method, attempt=attempt + 1)
+                    return await self.raw_request(uri, params, data, method, attempt=attempt + 1, base_url=base_url)
                 raise TractiveError("Request limit exceeded")
 
             if "Content-Type" in response.headers and "application/json" in response.headers["Content-Type"]:
