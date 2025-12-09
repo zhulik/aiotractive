@@ -11,4 +11,4 @@ class TrackableObject(DataObject):
         Returns health_overview data from the APS API endpoint.
         Replaces the deprecated wellness_overview message.
         """
-        return await self._api.raw_request(f"pet/{self._id}/health/overview", base_url=self._api.APS_API_URL)
+        return await self._api.request(f"pet/{self._id}/health/overview", base_url=self._api.APS_API_URL)
