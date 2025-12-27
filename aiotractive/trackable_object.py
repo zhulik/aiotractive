@@ -7,7 +7,7 @@ class TrackableObject(DataObject):
 
     async def health_overview(self):
         """Get health overview data including activity, sleep, rest, and health metrics.
-        
+
         Returns health_overview data from the APS API endpoint.
         Replaces the deprecated wellness_overview message.
         """
