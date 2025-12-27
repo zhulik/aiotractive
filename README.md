@@ -4,7 +4,7 @@
 
 **Unofficial** Asynchronous Python client for the [Tractive](https://tractive.com) REST API.
 
-**This project and it's author are not affilated with Tractive GmbH**
+**This project and its author are not affiliated with Tractive GmbH**
 
 This project is a result of reverse engineering of the Tractive web app.
 
@@ -63,41 +63,43 @@ tracker = trackers[0]
 tracker = client.tracker("TRACKER_ID")
 
 # Retrieve details
-await trackers.details() # Includes device capabilities, battery status(not level), charging state and so on
+await tracker.details() # Includes device capabilities, battery status (not level), charging state and so on
 
 await tracker.hw_info() # Includes battery level, firmware version, model and so on
 
 # Retrieve current location 
 await tracker.pos_report() # Includes coordinates, latitude, speed and so on
-# Retrieve hardware info
 
-# Retrive history positions
-```python
+# Retrieve history positions
 now = datetime.timestamp(datetime.now())
 time_from = now - 3600 * LAST_HOURS
 time_to = now
-format = json_segments
-await tracker.positions(time_from, time_to, format):
-```
+fmt = "json_segments"
+await tracker.positions(time_from, time_to, fmt)
 
 # Control the buzzer
-await set_buzzer_active(True) # or False
+await tracker.set_buzzer_active(True) # or False
 
 # Control the LED
-await set_led_active(True) # or False
+await tracker.set_led_active(True) # or False
 
 # Control the live tracking
-await set_live_tracking_active(True) # or False
+await tracker.set_live_tracking_active(True) # or False
 ```
 
 #### Trackable objects (usually pets)
 ```python
 objects = await client.trackable_objects()
+obj = objects[0]
 
-object = objects[0]
+# Or get a specific trackable object by ID
+obj = client.trackable_object("TRACKABLE_ID")
 
 # Retrieve details
-await object.details() # Includes pet's name, pet's tracker id and so on
+await obj.details() # Includes pet's name, pet's tracker id and so on
+
+# Retrieve health overview (activity, sleep, rest, and health metrics)
+await obj.health_overview()
 ```
 
 #### Events
@@ -114,6 +116,15 @@ the LED and the live tracking.
 
 All following events will have the same name, but only include one of these: either a position, battery info, or a buzzer/LED/live
 status.
+
+## Exceptions
+
+The library raises the following exceptions:
+
+- `TractiveError` - Base exception class
+- `UnauthorizedError` - When authentication fails or token is invalid
+- `NotFoundError` - When the requested resource is not found (404)
+- `DisconnectedError` - When the event channel disconnects
 
 ## Contribution
 You know;)
