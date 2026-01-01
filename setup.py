@@ -1,9 +1,11 @@
 #!/usr/bin/env python
 """The setup script."""
 
+from pathlib import Path
+
 from setuptools import setup
 
-with open("README.md", "r") as f:
+with Path("README.md").open() as f:
     readme = f.read()
 
 setup(
