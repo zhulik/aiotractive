@@ -5,6 +5,7 @@ import json
 import logging
 import random
 import time
+from http import HTTPStatus
 
 import aiohttp
 from aiohttp.client_exceptions import ClientResponseError
@@ -17,15 +18,17 @@ CLIENT_ID = "625e533dc3c3b41c28a669f0"
 _LOGGER = logging.getLogger(__name__)
 
 
-class API:  # pylint: disable=too-many-instance-attributes
+class API:
+    """Client for the API handling auth, requests, retries, and error mapping."""
+
     API_URL = URL("https://graph.tractive.com/4/")
     APS_API_URL = URL("https://aps-api.tractive.com/api/1/")
 
     DEFAULT_TIMEOUT = 10
 
-    TOKEN_URI = "auth/token"
+    TOKEN_URI = "auth/token"  # noqa: S105
 
-    def __init__(  # pylint: disable=too-many-arguments
+    def __init__(
         self,
         login,
         password,
@@ -34,8 +37,9 @@ class API:  # pylint: disable=too-many-instance-attributes
         loop=None,
         session=None,
         retry_count=3,
-        retry_delay=lambda attempt: 4**attempt + random.uniform(0, 3),
+        retry_delay=lambda attempt: 4**attempt + random.uniform(0, 3),  # noqa: S311
     ):
+        """Initialize."""
         self._login = login
         self._password = password
         self._client_id = client_id
@@ -56,10 +60,12 @@ class API:  # pylint: disable=too-many-instance-attributes
         self._retry_delay = retry_delay
 
     async def user_id(self):
+        """Get user ID."""
         await self.authenticate()
         return self._user_credentials["user_id"]
 
     async def auth_headers(self):
+        """Get authentication headers."""
         await self.authenticate()
         return {**self.base_headers(), **self._auth_headers}
 
@@ -68,15 +74,15 @@ class API:  # pylint: disable=too-many-instance-attributes
         try:
             return await self.raw_request(*args, **kwargs)
         except ClientResponseError as error:
-            if error.status in [401, 403]:
+            if error.status in [HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN]:
                 raise UnauthorizedError from error
-            if error.status == 404:
+            if error.status == HTTPStatus.NOT_FOUND:
                 raise NotFoundError from error
             raise TractiveError from error
         except Exception as error:
             raise TractiveError from error
 
-    async def raw_request(  # pylint: disable=too-many-arguments
+    async def raw_request(
         self,
         uri,
         params=None,
@@ -95,7 +101,7 @@ class API:  # pylint: disable=too-many-instance-attributes
         ) as response:
             _LOGGER.debug("Request %s, status: %s", response.url, response.status)
 
-            if response.status == 429:
+            if response.status == HTTPStatus.TOO_MANY_REQUESTS:
                 if attempt <= self._retry_count:
                     delay = self._retry_delay(attempt)
                     _LOGGER.info("Request limit exceeded, retrying in %s second", delay)
@@ -118,10 +124,10 @@ class API:  # pylint: disable=too-many-instance-attributes
             return await response.read()
 
     async def authenticate(self):
-        """Perform authenticateion."""
+        """Perform authentication."""
         if (
             self._user_credentials is not None
-            and self._user_credentials["expires_at"] - time.time() < 3600
+            and self._user_credentials["expires_at"] - time.time() < 3600  # noqa: PLR2004
         ):
             self._user_credentials = None
             self._auth_headers = None
@@ -150,11 +156,13 @@ class API:  # pylint: disable=too-many-instance-attributes
                     self._user_credentials = await response.json()
                     self._auth_headers = {
                         "x-tractive-user": self._user_credentials["user_id"],
-                        "authorization": f"Bearer {self._user_credentials['access_token']}",
+                        "authorization": (
+                            f"Bearer {self._user_credentials['access_token']}"
+                        ),
                     }
                     return self._user_credentials
         except ClientResponseError as error:
-            if error.status in [401, 403]:
+            if error.status in [HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN]:
                 raise UnauthorizedError from error
             raise TractiveError from error
         except Exception as error:
@@ -166,6 +174,7 @@ class API:  # pylint: disable=too-many-instance-attributes
             await self.session.close()
 
     def base_headers(self):
+        """Get base headers."""
         return {
             "x-tractive-client": self._client_id,
             "content-type": "application/json;charset=UTF-8",

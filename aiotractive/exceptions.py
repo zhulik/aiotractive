@@ -14,4 +14,4 @@ class NotFoundError(TractiveError):
 
 
 class DisconnectedError(TractiveError):
-    """Channel disconnected"""
+    """Channel disconnected."""

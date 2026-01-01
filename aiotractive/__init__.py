@@ -1,1 +1,5 @@
-from .tractive import Tractive  # noqa
+"""aiotractive library."""
+
+from .tractive import Tractive
+
+__all__ = ["Tractive"]
