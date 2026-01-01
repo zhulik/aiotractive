@@ -27,14 +27,20 @@ class Tracker(DataObject):
     async def set_buzzer_active(self, active):
         action = self.ACTIONS[active]
 
-        return await self._api.request(f"tracker/{self._id}/command/buzzer_control/{action}")
+        return await self._api.request(
+            f"tracker/{self._id}/command/buzzer_control/{action}"
+        )
 
     async def set_led_active(self, active):
         action = self.ACTIONS[active]
 
-        return await self._api.request(f"tracker/{self._id}/command/led_control/{action}")
+        return await self._api.request(
+            f"tracker/{self._id}/command/led_control/{action}"
+        )
 
     async def set_live_tracking_active(self, active):
         action = self.ACTIONS[active]
 
-        return await self._api.request(f"tracker/{self._id}/command/live_tracking/{action}")
+        return await self._api.request(
+            f"tracker/{self._id}/command/live_tracking/{action}"
+        )

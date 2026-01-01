@@ -77,7 +77,13 @@ class API:  # pylint: disable=too-many-instance-attributes
             raise TractiveError from error
 
     async def raw_request(  # pylint: disable=too-many-arguments
-        self, uri, params=None, data=None, method="GET", attempt: int = 1, base_url=API_URL
+        self,
+        uri,
+        params=None,
+        data=None,
+        method="GET",
+        attempt: int = 1,
+        base_url=API_URL,
     ):
         """Perform request."""
         async with self.session.request(
@@ -94,16 +100,29 @@ class API:  # pylint: disable=too-many-instance-attributes
                     delay = self._retry_delay(attempt)
                     _LOGGER.info("Request limit exceeded, retrying in %s second", delay)
                     await asyncio.sleep(delay)
-                    return await self.raw_request(uri, params, data, method, attempt=attempt + 1, base_url=base_url)
+                    return await self.raw_request(
+                        uri,
+                        params,
+                        data,
+                        method,
+                        attempt=attempt + 1,
+                        base_url=base_url,
+                    )
                 raise TractiveError("Request limit exceeded")
 
-            if "Content-Type" in response.headers and "application/json" in response.headers["Content-Type"]:
+            if (
+                "Content-Type" in response.headers
+                and "application/json" in response.headers["Content-Type"]
+            ):
                 return await response.json()
             return await response.read()
 
     async def authenticate(self):
         """Perform authenticateion."""
-        if self._user_credentials is not None and self._user_credentials["expires_at"] - time.time() < 3600:
+        if (
+            self._user_credentials is not None
+            and self._user_credentials["expires_at"] - time.time() < 3600
+        ):
             self._user_credentials = None
             self._auth_headers = None
 
@@ -124,7 +143,10 @@ class API:  # pylint: disable=too-many-instance-attributes
                 headers=self.base_headers(),
                 timeout=self._timeout,
             ) as response:
-                if "Content-Type" in response.headers and "application/json" in response.headers["Content-Type"]:
+                if (
+                    "Content-Type" in response.headers
+                    and "application/json" in response.headers["Content-Type"]
+                ):
                     self._user_credentials = await response.json()
                     self._auth_headers = {
                         "x-tractive-user": self._user_credentials["user_id"],
