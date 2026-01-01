@@ -9,12 +9,9 @@ yarl=">=1.7.2"
 aiotractive = {editable = true, path = "."}
 
 [dev-packages]
-isort=">=5.8.0"
-pylint=">=2.8.2"
-flake8=">=3.9.2"
-black=">=21.5b1"
 twine="3.4.1"
 wheel=">=0.36.2"
+ruff="0.14.10"
 typing_extensions=">=4.10.0"
 tomli=">=2.1.0"
 
