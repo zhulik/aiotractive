@@ -57,7 +57,7 @@ jobs:
       - name: Build the package
         run: pipenv run make dist
       - name: Publish the package
-        uses: pypa/gh-action-pypi-publish@master
+        uses: pypa/gh-action-pypi-publish@release/v1
         with:
           user: __token__
           password: ${{ secrets.pypi_token }}
