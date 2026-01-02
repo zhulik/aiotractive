@@ -11,6 +11,7 @@ aiotractive = {editable = true, path = "."}
 [dev-packages]
 twine="3.4.1"
 wheel=">=0.36.2"
+pre-commit="4.5.1"
 ruff="0.14.10"
 typing_extensions=">=4.10.0"
 tomli=">=2.1.0"

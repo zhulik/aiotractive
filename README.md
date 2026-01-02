@@ -67,7 +67,7 @@ await tracker.details() # Includes device capabilities, battery status (not leve
 
 await tracker.hw_info() # Includes battery level, firmware version, model and so on
 
-# Retrieve current location 
+# Retrieve current location
 await tracker.pos_report() # Includes coordinates, latitude, speed and so on
 
 # Retrieve history positions
@@ -125,6 +125,12 @@ The library raises the following exceptions:
 - `UnauthorizedError` - When authentication fails or token is invalid
 - `NotFoundError` - When the requested resource is not found (404)
 - `DisconnectedError` - When the event channel disconnects
+
+## Creating a development environment
+
+- `pipenv install --dev`
+- `pipenv shell`
+- `pre-commit install`
 
 ## Contribution
 You know;)
