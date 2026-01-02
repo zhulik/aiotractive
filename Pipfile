@@ -4,8 +4,8 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-aiohttp=">=3.8.1"
-yarl=">=1.7.2"
+aiohttp=">=3.13.0"
+yarl=">=1.21.0"
 aiotractive = {editable = true, path = "."}
 
 [dev-packages]
@@ -17,7 +17,7 @@ typing_extensions=">=4.10.0"
 tomli=">=2.1.0"
 
 [requires]
-python_version = "3.10"
+python_version = "3.14"
 
 [pipenv]
 allow_prereleases = true
