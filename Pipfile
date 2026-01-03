@@ -17,7 +17,7 @@ typing_extensions=">=4.10.0"
 tomli=">=2.1.0"
 
 [requires]
-python_version = "3.14"
+python_version = "3"
 
 [pipenv]
 allow_prereleases = true
