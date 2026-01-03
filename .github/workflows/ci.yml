@@ -6,7 +6,7 @@ on:
   - pull_request
 
 jobs:
-  test:
+  lint:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -36,6 +36,18 @@ jobs:
 
       - name: Run linters
         run: pipenv run make
+
+  test:
+    runs-on: ubuntu-latest
+    needs: [lint]
+    if: always()
+    steps:
+      - name: Check lint results
+        run: |
+          if [[ "${{ needs.lint.result }}" != "success" ]]; then
+            echo "Lint failed"
+            exit 1
+          fi
 
   publish:
     name: Publish a Python distribution to PyPI
