@@ -7,6 +7,7 @@ import json
 import time
 from asyncio.exceptions import TimeoutError as AIOTimeoutError
 from collections.abc import AsyncIterator
+from http import HTTPStatus
 from typing import TYPE_CHECKING, Any
 
 import aiohttp
@@ -87,7 +88,7 @@ class Channel:
             except AIOTimeoutError:
                 continue
             except ClientResponseError as error:
-                if error.status in (401, 403):
+                if error.status in (HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN):
                     exc = UnauthorizedError(str(error))
                 else:
                     exc = TractiveError(str(error))
