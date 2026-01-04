@@ -84,7 +84,7 @@ class API:
         try:
             return await self.raw_request(*args, **kwargs)
         except ClientResponseError as error:
-            if error.status in [HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN]:
+            if error.status in (HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN):
                 raise UnauthorizedError from error
             if error.status == HTTPStatus.NOT_FOUND:
                 raise NotFoundError from error
