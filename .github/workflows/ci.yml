@@ -37,6 +37,9 @@ jobs:
       - name: Run linters
         run: pipenv run make lint
 
+      - name: Run tests
+        run: pipenv run make test
+
   test:
     runs-on: ubuntu-latest
     needs: [lint]
