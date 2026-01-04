@@ -16,6 +16,12 @@ lint.ignore = [
     "TRY301",   # Abstract raise to an inner function
 ]
 
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = [
+    "S101",     # Use of `assert` detected
+    "SLF001",   # Private member accessed
+    ]
+
 [tool.ruff.lint.mccabe]
 max-complexity = 25
 
@@ -36,3 +42,6 @@ disallow_untyped_decorators = true
 no_implicit_optional = true
 strict_equality = true
 warn_unreachable = true
+
+[tool.pytest.ini_options]
+asyncio_default_fixture_loop_scope = "session"
