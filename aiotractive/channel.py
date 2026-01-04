@@ -87,7 +87,7 @@ class Channel:
             except AIOTimeoutError:
                 continue
             except ClientResponseError as error:
-                if error.status in [401, 403]:
+                if error.status in (401, 403):
                     exc = UnauthorizedError(str(error))
                 else:
                     exc = TractiveError(str(error))
