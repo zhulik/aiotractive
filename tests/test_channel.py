@@ -74,6 +74,59 @@ async def test_listen_receives_event(channel: Channel, mock_api: MagicMock) -> N
     events.append(await channel._queue.get())
 
     assert events
+    assert len(events) == 1
     event = events[0]
     assert event["event"]["message"] == "test_event"
     assert event["event"]["data"] == {"id": "123"}
+
+
+@pytest.mark.asyncio
+async def test_listen_keep_alive(channel: Channel, mock_api: MagicMock) -> None:
+    """Test that _listen updates _last_keep_alive on keep-alive message."""
+    event_data = b'{"message": "keep-alive"}'
+    mock_response = create_mock_response([event_data])
+
+    mock_context = AsyncMock()
+    mock_context.__aenter__.return_value = mock_response
+    mock_api.session.request.return_value = mock_context
+
+    assert channel._last_keep_alive is None
+
+    task = asyncio.create_task(channel._listen())
+    await asyncio.sleep(0.1)
+    task.cancel()
+
+    assert channel._last_keep_alive is not None
+
+    events = []
+    events.append(await channel._queue.get())
+
+    # Queue should only have the cancelled event, no keep-alive events
+    assert events
+    assert len(events) == 1
+    event = events[0]
+    assert event["type"] == "cancelled"
+
+
+@pytest.mark.asyncio
+async def test_listen_handshake(channel: Channel, mock_api: MagicMock) -> None:
+    """Test that _listen ignores handshake messages."""
+    event_data = b'{"message": "handshake"}'
+    mock_response = create_mock_response([event_data])
+
+    mock_context = AsyncMock()
+    mock_context.__aenter__.return_value = mock_response
+    mock_api.session.request.return_value = mock_context
+
+    task = asyncio.create_task(channel._listen())
+    await asyncio.sleep(0.1)
+    task.cancel()
+
+    events = []
+    events.append(await channel._queue.get())
+
+    # Queue should only have the cancelled event, no keep-alive events
+    assert events
+    assert len(events) == 1
+    event = events[0]
+    assert event["type"] == "cancelled"
