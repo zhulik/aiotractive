@@ -5,6 +5,7 @@ name = "pypi"
 
 [packages]
 aiohttp=">=3.13.0"
+orjson=">=3.10.8"
 yarl=">=1.21.0"
 aiotractive = {editable = true, path = "."}
 

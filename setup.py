@@ -19,7 +19,8 @@ setup(
     license="The MIT License",
     install_requires=[
         "aiohttp>=3.13.0",
-        "yarl>=1.21.0",
+        "orjson>=3.10.8",
+        "yarl>=1.21.0"
     ],
     packages=["aiotractive"],
     package_dir={"aiotractive": "aiotractive"},

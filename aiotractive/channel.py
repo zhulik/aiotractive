@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import time
 from asyncio.exceptions import TimeoutError as AIOTimeoutError
 from collections.abc import AsyncIterator
@@ -11,6 +10,7 @@ from http import HTTPStatus
 from typing import TYPE_CHECKING, Any
 
 import aiohttp
+import orjson
 from aiohttp.client_exceptions import ClientResponseError
 
 from .api import API
@@ -78,7 +78,7 @@ class Channel:
                     ),
                 ) as response:
                     async for data in response.content:
-                        event = json.loads(data)
+                        event = orjson.loads(data)
                         if event["message"] == "keep-alive":
                             self._last_keep_alive = time.time()
                             continue

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import random
 import time
@@ -12,6 +11,7 @@ from http import HTTPStatus
 from typing import TYPE_CHECKING, Any
 
 import aiohttp
+import orjson
 from aiohttp.client_exceptions import ClientResponseError
 from yarl import URL
 
@@ -153,7 +153,7 @@ class API:
             async with self.session.request(
                 "POST",
                 self.API_URL.join(URL(self.TOKEN_URI)),
-                data=json.dumps(
+                data=orjson.dumps(
                     {
                         "platform_email": self._login,
                         "platform_token": self._password,
