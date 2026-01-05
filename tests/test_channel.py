@@ -88,13 +88,13 @@ async def test_listen_receives_event(channel: Channel, mock_api: MagicMock) -> N
 
 async def test_listen_multiple_events(channel: Channel, mock_api: MagicMock) -> None:
     """Test that _listen processes multiple events in sequence."""
-    events = [
+    input_events = [
         b'{"message": "keep-alive"}',
         b'{"message": "tracker_status", "id": "1"}',
         b'{"message": "handshake"}',
         b'{"message": "position", "id": "2"}',
     ]
-    mock_response = create_mock_response(events)
+    mock_response = create_mock_response(input_events)
 
     mock_context = AsyncMock()
     mock_context.__aenter__.return_value = mock_response
