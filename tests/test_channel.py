@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import asyncio
+from http import HTTPStatus
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from aiohttp import ClientResponse
+from aiohttp.client_exceptions import ClientResponseError
 
 from aiotractive.channel import Channel
+from aiotractive.exceptions import TractiveError, UnauthorizedError
 
 
 @pytest.fixture
@@ -69,15 +72,48 @@ async def test_listen_receives_event(channel: Channel, mock_api: MagicMock) -> N
     task = asyncio.create_task(channel._listen())
     await asyncio.sleep(0.1)
     task.cancel()
+    await task
 
     events = []
-    events.append(await channel._queue.get())
+    while not channel._queue.empty():
+        events.append(await channel._queue.get())
 
     assert events
-    assert len(events) == 1
+    assert len(events) == 2  # One event + one cancelled event
     event = events[0]
     assert event["event"]["message"] == "test_event"
     assert event["event"]["data"] == {"id": "123"}
+
+
+@pytest.mark.asyncio
+async def test_listen_multiple_events(channel: Channel, mock_api: MagicMock) -> None:
+    """Test that _listen processes multiple events in sequence."""
+    events = [
+        b'{"message": "keep-alive"}',
+        b'{"message": "tracker_status", "id": "1"}',
+        b'{"message": "handshake"}',
+        b'{"message": "position", "id": "2"}',
+    ]
+    mock_response = create_mock_response(events)
+
+    mock_context = AsyncMock()
+    mock_context.__aenter__.return_value = mock_response
+    mock_api.session.request.return_value = mock_context
+
+    task = asyncio.create_task(channel._listen())
+    await asyncio.sleep(0.1)
+    task.cancel()
+    await task
+
+    assert channel._last_keep_alive is not None
+
+    events = []
+    while not channel._queue.empty():
+        events.append(await channel._queue.get())
+
+    assert len(events) == 3  # Two events + one cancelled event
+    assert events[0]["event"]["message"] == "tracker_status"
+    assert events[1]["event"]["message"] == "position"
 
 
 @pytest.mark.asyncio
@@ -95,11 +131,13 @@ async def test_listen_keep_alive(channel: Channel, mock_api: MagicMock) -> None:
     task = asyncio.create_task(channel._listen())
     await asyncio.sleep(0.1)
     task.cancel()
+    await task
 
     assert channel._last_keep_alive is not None
 
     events = []
-    events.append(await channel._queue.get())
+    while not channel._queue.empty():
+        events.append(await channel._queue.get())
 
     # Queue should only have the cancelled event, no keep-alive events
     assert events
@@ -121,12 +159,90 @@ async def test_listen_handshake(channel: Channel, mock_api: MagicMock) -> None:
     task = asyncio.create_task(channel._listen())
     await asyncio.sleep(0.1)
     task.cancel()
+    await task
 
     events = []
-    events.append(await channel._queue.get())
+    while not channel._queue.empty():
+        events.append(await channel._queue.get())
 
     # Queue should only have the cancelled event, no keep-alive events
     assert events
     assert len(events) == 1
     event = events[0]
     assert event["type"] == "cancelled"
+
+
+@pytest.mark.asyncio
+async def test_listen_unauthorized_401(channel: Channel, mock_api: MagicMock) -> None:
+    """Test that _listen handles 401 ClientResponseError."""
+    exc = ClientResponseError(
+        request_info=MagicMock(),
+        history=(),
+        status=HTTPStatus.UNAUTHORIZED,
+        message="Unauthorized",
+    )
+    mock_api.session.request.side_effect = exc
+
+    task = asyncio.create_task(channel._listen())
+    await asyncio.sleep(0.1)
+    task.cancel()
+
+    events = []
+    while not channel._queue.empty():
+        events.append(await channel._queue.get())
+
+    assert events
+    assert len(events) == 1
+    event = events[0]
+    assert event["type"] == "error"
+    assert isinstance(event["error"], UnauthorizedError)
+    assert event["error"].__cause__ is exc
+
+
+@pytest.mark.asyncio
+async def test_listen_unauthorized_404(channel: Channel, mock_api: MagicMock) -> None:
+    """Test that _listen handles 404 ClientResponseError."""
+    exc = ClientResponseError(
+        request_info=MagicMock(),
+        history=(),
+        status=HTTPStatus.NOT_FOUND,
+        message="Not found",
+    )
+    mock_api.session.request.side_effect = exc
+
+    task = asyncio.create_task(channel._listen())
+    await asyncio.sleep(0.1)
+    task.cancel()
+
+    events = []
+    while not channel._queue.empty():
+        events.append(await channel._queue.get())
+
+    assert events
+    assert len(events) == 1
+    event = events[0]
+    assert event["type"] == "error"
+    assert isinstance(event["error"], TractiveError)
+    assert event["error"].__cause__ is exc
+
+
+@pytest.mark.asyncio
+async def test_listen_exception(channel: Channel, mock_api: MagicMock) -> None:
+    """Test that _listen handles generic exceptions."""
+    exc = ValueError("Something went wrong")
+    mock_api.session.request.side_effect = exc
+
+    task = asyncio.create_task(channel._listen())
+    await asyncio.sleep(0.1)
+    task.cancel()
+
+    events = []
+    while not channel._queue.empty():
+        events.append(await channel._queue.get())
+
+    assert events
+    assert len(events) == 1
+    event = events[0]
+    assert event["type"] == "error"
+    assert isinstance(event["error"], TractiveError)
+    assert event["error"].__cause__ is exc
