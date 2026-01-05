@@ -26,12 +26,12 @@ def mock_api() -> MagicMock:
 
 
 @pytest.fixture
-def channel(mock_api) -> Channel:
+def channel(mock_api: MagicMock) -> Channel:
     """Create a Channel instance with mocked API."""
     return Channel(mock_api)
 
 
-def create_mock_response(events) -> MagicMock:
+def create_mock_response(events: list[bytes]) -> MagicMock:
     """Create a mock response with async iterator over events."""
     response = MagicMock(spec=ClientResponse)
     response.content = AsyncIterator(events)
@@ -61,7 +61,6 @@ class AsyncIterator:
             raise StopAsyncIteration from None
 
 
-@pytest.mark.asyncio
 async def test_listen_receives_event(channel: Channel, mock_api: MagicMock) -> None:
     """Test that _listen puts valid events into the queue."""
     event_data = b'{"message": "test_event", "data": {"id": "123"}}'
@@ -87,7 +86,6 @@ async def test_listen_receives_event(channel: Channel, mock_api: MagicMock) -> N
     assert event["event"]["data"] == {"id": "123"}
 
 
-@pytest.mark.asyncio
 async def test_listen_multiple_events(channel: Channel, mock_api: MagicMock) -> None:
     """Test that _listen processes multiple events in sequence."""
     events = [
@@ -118,7 +116,6 @@ async def test_listen_multiple_events(channel: Channel, mock_api: MagicMock) -> 
     assert events[1]["event"]["message"] == "position"
 
 
-@pytest.mark.asyncio
 async def test_listen_keep_alive(channel: Channel, mock_api: MagicMock) -> None:
     """Test that _listen updates _last_keep_alive on keep-alive message."""
     event_data = b'{"message": "keep-alive"}'
@@ -148,7 +145,6 @@ async def test_listen_keep_alive(channel: Channel, mock_api: MagicMock) -> None:
     assert event["type"] == "cancelled"
 
 
-@pytest.mark.asyncio
 async def test_listen_handshake(channel: Channel, mock_api: MagicMock) -> None:
     """Test that _listen ignores handshake messages."""
     event_data = b'{"message": "handshake"}'
@@ -174,7 +170,6 @@ async def test_listen_handshake(channel: Channel, mock_api: MagicMock) -> None:
     assert event["type"] == "cancelled"
 
 
-@pytest.mark.asyncio
 async def test_listen_timeout(channel: Channel, mock_api: MagicMock) -> None:
     """Test that _listen continues loop on AIOTimeoutError."""
     call_count = 0
@@ -200,7 +195,6 @@ async def test_listen_timeout(channel: Channel, mock_api: MagicMock) -> None:
     assert call_count >= 2
 
 
-@pytest.mark.asyncio
 async def test_listen_unauthorized_401(channel: Channel, mock_api: MagicMock) -> None:
     """Test that _listen handles 401 ClientResponseError."""
     exc = ClientResponseError(
@@ -227,7 +221,6 @@ async def test_listen_unauthorized_401(channel: Channel, mock_api: MagicMock) ->
     assert event["error"].__cause__ is exc
 
 
-@pytest.mark.asyncio
 async def test_listen_unauthorized_404(channel: Channel, mock_api: MagicMock) -> None:
     """Test that _listen handles 404 ClientResponseError."""
     exc = ClientResponseError(
@@ -254,7 +247,6 @@ async def test_listen_unauthorized_404(channel: Channel, mock_api: MagicMock) ->
     assert event["error"].__cause__ is exc
 
 
-@pytest.mark.asyncio
 async def test_listen_exception(channel: Channel, mock_api: MagicMock) -> None:
     """Test that _listen handles generic exceptions."""
     exc = ValueError("Something went wrong")

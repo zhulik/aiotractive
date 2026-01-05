@@ -88,6 +88,7 @@ class Channel:
             except AIOTimeoutError:
                 continue
             except ClientResponseError as error:
+                exc: TractiveError
                 if error.status in (HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN):
                     exc = UnauthorizedError(str(error))
                 else:
