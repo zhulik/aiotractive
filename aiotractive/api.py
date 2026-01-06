@@ -11,7 +11,6 @@ from http import HTTPStatus
 from typing import TYPE_CHECKING, Any
 
 import aiohttp
-import orjson
 from aiohttp.client_exceptions import ClientResponseError
 from yarl import URL
 
@@ -153,13 +152,11 @@ class API:
             async with self.session.request(
                 "POST",
                 self.API_URL.join(URL(self.TOKEN_URI)),
-                data=orjson.dumps(
-                    {
-                        "platform_email": self._login,
-                        "platform_token": self._password,
-                        "grant_type": "tractive",
-                    }
-                ),
+                json={
+                    "platform_email": self._login,
+                    "platform_token": self._password,
+                    "grant_type": "tractive",
+                },
                 headers=self.base_headers(),
                 timeout=aiohttp.ClientTimeout(total=self._timeout),
             ) as response:
