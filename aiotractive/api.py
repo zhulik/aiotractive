@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import random
 import time
@@ -153,13 +152,11 @@ class API:
             async with self.session.request(
                 "POST",
                 self.API_URL.join(URL(self.TOKEN_URI)),
-                data=json.dumps(
-                    {
-                        "platform_email": self._login,
-                        "platform_token": self._password,
-                        "grant_type": "tractive",
-                    }
-                ),
+                json={
+                    "platform_email": self._login,
+                    "platform_token": self._password,
+                    "grant_type": "tractive",
+                },
                 headers=self.base_headers(),
                 timeout=aiohttp.ClientTimeout(total=self._timeout),
             ) as response:
