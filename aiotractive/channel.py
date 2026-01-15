@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import asyncio
-import random
 import time
 from asyncio.exceptions import TimeoutError as AIOTimeoutError
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator
 from http import HTTPStatus
 from typing import TYPE_CHECKING, Any
 
@@ -27,21 +26,16 @@ class Channel:
     KEEP_ALIVE_TIMEOUT = 60  # seconds
     CHECK_CONNECTION_TIME = 5  # seconds
 
-    def __init__(
-        self,
-        api: API,
-        retry_count: int = 3,
-        retry_delay: Callable[[int], float] = lambda attempt: 4**attempt
-        + random.uniform(0, 3),  # noqa: S311
-    ) -> None:
+    def __init__(self, api: API) -> None:
         """Initialize the channel."""
         self._api = api
         self._last_keep_alive: float | None = None
         self._listen_task: asyncio.Task[None] | None = None
         self._check_connection_task: asyncio.Task[None] | None = None
         self._queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
-        self._retry_count = retry_count
-        self._retry_delay = retry_delay
+
+        self._retry_count = api.retry_count
+        self._retry_delay = api.retry_delay
 
     async def listen(self) -> AsyncIterator[dict[str, Any]]:
         """Listen for real-time events from the Tractive API."""
