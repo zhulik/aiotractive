@@ -9,7 +9,9 @@ lint.ignore = [
     "D213",     # Multi-line docstring summary should start at the second line
     "EM101",    # Exception must not use a string literal, assign to variable first
     "FBT001",   # Boolean-typed positional argument in function definition
+    "PLR0912",  # Too many branches
     "PLR0913",  # Too many arguments in function definition
+    "PLR0915",  # Too many statements
     "TC001",    # Move application import into a type-checking block
     "TC003",    # Move standard library import into a type-checking block
     "TRY003",   # Avoid specifying long messages outside the exception class
