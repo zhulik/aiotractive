@@ -66,6 +66,9 @@ class Channel:
     async def _listen(self) -> None:
         if TYPE_CHECKING:
             assert self._api.session is not None
+
+        exc: TractiveError
+
         attempt = 0
         while True:
             attempt += 1
@@ -92,13 +95,7 @@ class Channel:
                             continue
                         await self._queue.put({"type": "event", "event": event})
             except AIOTimeoutError:
-                if attempt <= self._retry_count:
-                    delay = self._retry_delay(attempt)
-                    await asyncio.sleep(delay)
-                    continue
-                exc = TractiveError("Connection timeout after retries")
-                await self._queue.put({"type": "error", "error": exc})
-                return
+                continue
             except ClientResponseError as error:
                 if error.status in (HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN):
                     # Non-recoverable failures
@@ -131,11 +128,6 @@ class Channel:
                 await self._queue.put({"type": "cancelled", "error": error})
                 return
             except Exception as error:  # noqa: BLE001
-                # Other exceptions, treat as recoverable
-                if attempt <= self._retry_count:
-                    delay = self._retry_delay(attempt)
-                    await asyncio.sleep(delay)
-                    continue
                 exc = TractiveError(str(error))
                 exc.__cause__ = error
                 await self._queue.put({"type": "error", "error": exc})
