@@ -103,6 +103,7 @@ class Channel:
                     exc.__cause__ = error
                     await self._queue.put({"type": "error", "error": exc})
                     return
+
                 if (
                     error.status == HTTPStatus.TOO_MANY_REQUESTS
                     or error.status >= HTTPStatus.INTERNAL_SERVER_ERROR
@@ -112,21 +113,22 @@ class Channel:
                         delay = self._retry_delay(attempt)
                         await asyncio.sleep(delay)
                         continue
-                    if error.status == HTTPStatus.TOO_MANY_REQUESTS:
-                        exc = TractiveError("Request limit exceeded")
-                    else:
-                        exc = TractiveError(str(error))
+
+                    exc = TractiveError(str(error))
                     exc.__cause__ = error
                     await self._queue.put({"type": "error", "error": exc})
                     return
+
                 # Other client errors, treat as non-recoverable
                 exc = TractiveError(str(error))
                 exc.__cause__ = error
                 await self._queue.put({"type": "error", "error": exc})
                 return
+
             except asyncio.CancelledError as error:
                 await self._queue.put({"type": "cancelled", "error": error})
                 return
+
             except Exception as error:  # noqa: BLE001
                 exc = TractiveError(str(error))
                 exc.__cause__ = error
