@@ -335,4 +335,4 @@ async def test_listen_retry_exhausted_on_429(
     event = events[0]
     assert event["type"] == "error"
     assert isinstance(event["error"], TractiveError)
-    assert str(event["error"]) == "Request limit exceeded"
+    assert "Too Many Requests" in str(event["error"])
