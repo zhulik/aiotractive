@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from asyncio.exceptions import TimeoutError as AIOTimeoutError
 from http import HTTPStatus
-from typing import Any
+from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -305,7 +305,7 @@ async def test_listen_retry_on_429_client_error(
     await task
 
     assert call_count >= 2
-    assert channel._retry_delay.called  # type: ignore[attr-defined]
+    assert cast(MagicMock, channel._retry_delay).called
 
 
 async def test_listen_retry_exhausted_on_429(
