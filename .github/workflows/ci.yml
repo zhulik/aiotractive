@@ -45,7 +45,8 @@ jobs:
             check-yaml \
             check-json \
             check-toml \
-            mixed-line-ending
+            mixed-line-ending \
+            --all-files
 
       - name: Run tests
         run: pipenv run make test
