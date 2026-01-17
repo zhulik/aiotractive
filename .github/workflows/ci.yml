@@ -39,7 +39,7 @@ jobs:
 
       - name: Run prek
         run: |
-          prek run \
+          pipenv run prek run \
             end-of-file-fixer \
             trailing-whitespace \
             check-yaml \
