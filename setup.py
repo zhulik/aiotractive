@@ -9,7 +9,7 @@ with Path("README.md").open() as f:
 
 setup(
     name="aiotractive",
-    version="0.7.0",
+    version="0.0.0",
     author="Gleb Sinyavskiy",
     author_email="zhulik.gleb@gmail.com",
     description="Asynchronous Python client for the Tractive REST API",
@@ -17,11 +17,7 @@ setup(
     long_description_content_type="text/markdown",
     url="https://github.com/zhulik/aiotractive",
     license="The MIT License",
-    install_requires=[
-        "aiohttp>=3.13.0",
-        "orjson>=3.10.8",
-        "yarl>=1.21.0"
-    ],
+    install_requires=["aiohttp>=3.13.0", "orjson>=3.10.8", "yarl>=1.21.0"],
     packages=["aiotractive"],
     package_dir={"aiotractive": "aiotractive"},
     include_package_data=True,

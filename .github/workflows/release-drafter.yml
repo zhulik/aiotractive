@@ -1,0 +1,21 @@
+name: Release Drafter
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  update_release_draft:
+    runs-on: ubuntu-latest
+    name: Release Drafter
+    steps:
+      - name: Checking out code from GitHub
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Run Release Drafter
+        uses: release-drafter/release-drafter@v6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
