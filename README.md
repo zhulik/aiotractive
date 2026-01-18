@@ -134,7 +134,7 @@ This library is fully typed and includes a `py.typed` marker for [PEP 561](https
 
 - `pipenv install --dev`
 - `pipenv shell`
-- `pre-commit install`
+- `prek install`
 
 ## Contribution
 You know;)

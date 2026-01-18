@@ -37,6 +37,18 @@ jobs:
       - name: Run linters
         run: pipenv run make lint
 
+      - name: Run prek
+        if: ${{ matrix.python-version }} == "3.14"
+        run: |
+          pipenv run prek run \
+            end-of-file-fixer \
+            trailing-whitespace \
+            check-yaml \
+            check-json \
+            check-toml \
+            mixed-line-ending \
+            --all-files
+
       - name: Run tests
         run: pipenv run make test
 
