@@ -1,0 +1,20 @@
+version: 2
+updates:
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      dev:
+        patterns:
+          - "aioresponses"
+          - "mypy"
+          - "prek"
+          - "pytest-asyncio"
+          - "pytest-cov"
+          - "pytest"
+          - "ruff"
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
