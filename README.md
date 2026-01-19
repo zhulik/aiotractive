@@ -1,5 +1,5 @@
 ## aiotractive
-[![Continuous Integration](https://img.shields.io/github/actions/workflow/status/zhulik/aiotractive/ci.yml?branch=main&label=Continuous Integration&logo=github&style=popout)](https://github.com/zhulik/aiotractive/actions/workflows/ci.yml?query=branch%3Amain)
+[![Continuous Integration](https://img.shields.io/github/actions/workflow/status/zhulik/aiotractive/ci.yml?branch=main&label=Continuous%20Integration&logo=github&style=popout)](https://github.com/zhulik/aiotractive/actions/workflows/ci.yml?query=branch%3Amain)
 
 **Unofficial** Asynchronous Python client for the [Tractive](https://tractive.com) REST API.
 
