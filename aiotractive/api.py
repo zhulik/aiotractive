@@ -60,8 +60,8 @@ class API:
         self._user_credentials: dict[str, Any] | None = None
         self._auth_headers: dict[str, str] | None = None
 
-        self._retry_count = retry_count
-        self._retry_delay = retry_delay
+        self.retry_count = retry_count
+        self.retry_delay = retry_delay
 
     async def user_id(self) -> str:
         """Get user ID."""
@@ -113,8 +113,8 @@ class API:
             _LOGGER.debug("Request %s, status: %s", response.url, response.status)
 
             if response.status == HTTPStatus.TOO_MANY_REQUESTS:
-                if attempt <= self._retry_count:
-                    delay = self._retry_delay(attempt)
+                if attempt <= self.retry_count:
+                    delay = self.retry_delay(attempt)
                     _LOGGER.info("Request limit exceeded, retrying in %s second", delay)
                     await asyncio.sleep(delay)
                     return await self.raw_request(

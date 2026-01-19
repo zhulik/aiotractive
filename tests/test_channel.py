@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from asyncio.exceptions import TimeoutError as AIOTimeoutError
 from http import HTTPStatus
-from typing import Any
+from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -21,6 +21,8 @@ def mock_api() -> MagicMock:
     """Create a mock API instance."""
     api = MagicMock()
     api.auth_headers = AsyncMock(return_value={"Authorization": "Bearer test"})
+    api.retry_count = 3
+    api.retry_delay = MagicMock(return_value=0.1)
 
     return api
 
@@ -35,7 +37,10 @@ def create_mock_response(events: list[bytes]) -> MagicMock:
     """Create a mock response with async iterator over events."""
     response = MagicMock(spec=ClientResponse)
     response.content = AsyncIterator(events)
-
+    response.status = 200
+    response.request_info = MagicMock()
+    response.history = ()
+    response.reason = "OK"
     return response
 
 
@@ -134,7 +139,7 @@ async def test_listen_keep_alive(channel: Channel, mock_api: MagicMock) -> None:
 
     assert channel._last_keep_alive is not None
 
-    events = []
+    events = []  # type: ignore[unreachable]
     while not channel._queue.empty():
         events.append(await channel._queue.get())
 
@@ -173,6 +178,7 @@ async def test_listen_handshake(channel: Channel, mock_api: MagicMock) -> None:
 async def test_listen_timeout(channel: Channel, mock_api: MagicMock) -> None:
     """Test that _listen continues loop on AIOTimeoutError."""
     call_count = 0
+    mock_api.retry_delay.return_value = 0
 
     def side_effect(*args: Any, **kwargs: Any) -> AsyncMock:  # noqa: ANN401,ARG001
         nonlocal call_count
@@ -250,6 +256,7 @@ async def test_listen_unauthorized_404(channel: Channel, mock_api: MagicMock) ->
 async def test_listen_exception(channel: Channel, mock_api: MagicMock) -> None:
     """Test that _listen handles generic exceptions."""
     exc = ValueError("Something went wrong")
+    mock_api.retry_delay.return_value = 0
     mock_api.session.request.side_effect = exc
 
     task = asyncio.create_task(channel._listen())
@@ -266,3 +273,66 @@ async def test_listen_exception(channel: Channel, mock_api: MagicMock) -> None:
     assert event["type"] == "error"
     assert isinstance(event["error"], TractiveError)
     assert event["error"].__cause__ is exc
+
+
+async def test_listen_retry_on_429_client_error(
+    channel: Channel, mock_api: MagicMock
+) -> None:
+    """Test that _listen retries on 429 ClientResponseError."""
+    call_count = 0
+
+    def side_effect(*args: Any, **kwargs: Any) -> AsyncMock:  # noqa: ANN401,ARG001
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            raise ClientResponseError(
+                request_info=MagicMock(),
+                history=(),
+                status=HTTPStatus.TOO_MANY_REQUESTS,
+                message="Too Many Requests",
+            )
+        mock_context = AsyncMock()
+        mock_context.__aenter__.return_value = create_mock_response(
+            [b'{"message": "tracker_status"}']
+        )
+        return mock_context
+
+    mock_api.session.request.side_effect = side_effect
+
+    task = asyncio.create_task(channel._listen())
+    await asyncio.sleep(0.2)
+    task.cancel()
+    await task
+
+    assert call_count >= 2
+    assert cast(MagicMock, channel._retry_delay).called
+
+
+async def test_listen_retry_exhausted_on_429(
+    channel: Channel, mock_api: MagicMock
+) -> None:
+    """Test that _listen gives up after exhausting retries on 429."""
+    mock_api.retry_count = 1
+
+    exc = ClientResponseError(
+        request_info=MagicMock(),
+        history=(),
+        status=HTTPStatus.TOO_MANY_REQUESTS,
+        message="Too Many Requests",
+    )
+    mock_api.session.request.side_effect = exc
+
+    task = asyncio.create_task(channel._listen())
+    await asyncio.sleep(0.5)
+    task.cancel()
+
+    events = []
+    while not channel._queue.empty():
+        events.append(await channel._queue.get())
+
+    assert events
+    assert len(events) == 1
+    event = events[0]
+    assert event["type"] == "error"
+    assert isinstance(event["error"], TractiveError)
+    assert "Too Many Requests" in str(event["error"])

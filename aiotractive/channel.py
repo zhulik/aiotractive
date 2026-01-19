@@ -34,6 +34,9 @@ class Channel:
         self._check_connection_task: asyncio.Task[None] | None = None
         self._queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
 
+        self._retry_count = api.retry_count
+        self._retry_delay = api.retry_delay
+
     async def listen(self) -> AsyncIterator[dict[str, Any]]:
         """Listen for real-time events from the Tractive API."""
         self._check_connection_task = asyncio.create_task(self._check_connection())
@@ -63,7 +66,12 @@ class Channel:
     async def _listen(self) -> None:
         if TYPE_CHECKING:
             assert self._api.session is not None
+
+        exc: TractiveError
+
+        attempt = 0
         while True:
+            attempt += 1
             try:
                 async with self._api.session.request(
                     "POST",
@@ -77,6 +85,7 @@ class Channel:
                         ceil_threshold=5,
                     ),
                 ) as response:
+                    response.raise_for_status()
                     async for data in response.content:
                         event = orjson.loads(data)
                         if event["message"] == "keep-alive":
@@ -88,11 +97,30 @@ class Channel:
             except AIOTimeoutError:
                 continue
             except ClientResponseError as error:
-                exc: TractiveError
                 if error.status in (HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN):
+                    # Non-recoverable failures
                     exc = UnauthorizedError(str(error))
-                else:
+                    exc.__cause__ = error
+                    await self._queue.put({"type": "error", "error": exc})
+                    return
+
+                if (
+                    error.status == HTTPStatus.TOO_MANY_REQUESTS
+                    or error.status >= HTTPStatus.INTERNAL_SERVER_ERROR
+                ):
+                    # Recoverable failures
+                    if attempt <= self._retry_count:
+                        delay = self._retry_delay(attempt)
+                        await asyncio.sleep(delay)
+                        continue
+
                     exc = TractiveError(str(error))
+                    exc.__cause__ = error
+                    await self._queue.put({"type": "error", "error": exc})
+                    return
+
+                # Other client errors, treat as non-recoverable
+                exc = TractiveError(str(error))
                 exc.__cause__ = error
                 await self._queue.put({"type": "error", "error": exc})
                 return
