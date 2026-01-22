@@ -16,7 +16,7 @@ FIXTURES_DIR = Path(__file__).parent / "fixtures"
 def load_fixture(name: str) -> dict[str, Any]:
     """Load a fixture from a JSON file."""
     with (FIXTURES_DIR / f"{name}.json").open(encoding="utf-8") as file:
-        return json.load(file)  # type: ignore[no-any-return]
+        return json.load(file)
 
 
 @pytest.fixture
