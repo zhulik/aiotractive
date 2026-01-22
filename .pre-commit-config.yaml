@@ -6,6 +6,10 @@ repos:
         args:
           - --fix
       - id: ruff-format
+  - repo: https://github.com/NSPBot911/ty-pre-commit
+    rev: v0.0.13
+    hooks:
+      - id: ty-check
   - repo: https://github.com/codespell-project/codespell
     rev: v2.4.1
     hooks:
@@ -33,10 +37,3 @@ repos:
         args:
           - --no-sort-keys
         exclude: "Pipfile.lock"
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.19.1
-    hooks:
-      - id: mypy
-        additional_dependencies:
-          - aiohttp
-          - yarl

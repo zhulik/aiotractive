@@ -1,4 +1,4 @@
-lint: ruff mypy
+lint: ruff ty
 
 format:
 	ruff format .
@@ -7,8 +7,8 @@ ruff:
 	ruff check .
 	ruff format .
 
-mypy:
-	mypy aiotractive
+ty:
+	ty check aiotractive
 
 test:
 	pytest tests --cov=aiotractive --cov-report=term-missing
@@ -17,4 +17,4 @@ dist:
 	python setup.py sdist bdist_wheel
 	twine check dist/*
 
-.PHONY: ruff mypy lint format test dist
+.PHONY: ruff ty lint format test dist

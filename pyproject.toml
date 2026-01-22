@@ -27,24 +27,6 @@ lint.ignore = [
 [tool.ruff.lint.mccabe]
 max-complexity = 25
 
-[tool.mypy]
-python_version = "3.14"
-show_error_codes = true
-warn_return_any = true
-warn_unused_configs = true
-disallow_untyped_defs = true
-disallow_incomplete_defs = true
-check_untyped_defs = true
-strict_optional = true
-warn_redundant_casts = true
-warn_unused_ignores = true
-disallow_subclassing_any = true
-disallow_untyped_calls = true
-disallow_untyped_decorators = true
-no_implicit_optional = true
-strict_equality = true
-warn_unreachable = true
-
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "session"
@@ -52,3 +34,6 @@ asyncio_default_fixture_loop_scope = "session"
 [[tool.mypy.overrides]]
 module = "tests.*"
 disallow_untyped_decorators = false
+
+[tool.ty.environment]
+python-version = "3.14"
