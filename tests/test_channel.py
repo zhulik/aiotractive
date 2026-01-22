@@ -139,7 +139,7 @@ async def test_listen_keep_alive(channel: Channel, mock_api: MagicMock) -> None:
 
     assert channel._last_keep_alive is not None
 
-    events = []  # type: ignore[unreachable]
+    events = []
     while not channel._queue.empty():
         events.append(await channel._queue.get())
 
