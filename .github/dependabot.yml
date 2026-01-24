@@ -8,12 +8,12 @@ updates:
       dev:
         patterns:
           - "aioresponses"
-          - "mypy"
           - "prek"
           - "pytest-asyncio"
           - "pytest-cov"
           - "pytest"
           - "ruff"
+          - "ty"
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
