@@ -33,7 +33,7 @@ jobs:
           pipenv sync --dev
 
       - name: Run prek auto-update
-        run: pipenv prek auto-update
+        run: pipenv run prek auto-update
 
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v8.1.0
