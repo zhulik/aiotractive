@@ -1,4 +1,6 @@
 version: 2
+enable-beta-ecosystems: true
+
 updates:
   - package-ecosystem: "pip"
     directory: "/"
@@ -9,9 +11,8 @@ updates:
         patterns:
           - "aioresponses"
           - "prek"
-          - "pytest-asyncio"
-          - "pytest-cov"
           - "pytest"
+          - "pytest-*"
           - "ruff"
           - "ty"
     ignore:
@@ -23,7 +24,19 @@ updates:
       - dependency-name: "aiohttp"
       - dependency-name: "orjson"
       - dependency-name: "yarl"
+
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
+    groups:
+      ci:
+        patterns: ["*"]
+
+  - package-ecosystem: "pre-commit"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      pre-commit:
+        patterns: ["*"]
