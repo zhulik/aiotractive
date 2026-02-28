@@ -1,13 +1,13 @@
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.2
+    rev: v0.15.4
     hooks:
       - id: ruff
         args:
           - --fix
       - id: ruff-format
   - repo: https://github.com/NSPBot911/ty-pre-commit
-    rev: v0.0.18
+    rev: v0.0.19
     hooks:
       - id: ty-check
         args:
