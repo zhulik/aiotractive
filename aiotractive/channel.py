@@ -9,7 +9,7 @@ from .exceptions import DisconnectedError, TractiveError, UnauthorizedError
 
 
 class Channel:
-    CHANNEL_URL = "https://channel.tractive.com/3/channel"
+    CHANNEL_URL = "https://channel.tractive.com/4/channel"
     IGNORE_MESSAGES = ["handshake", "keep-alive"]
 
     KEEP_ALIVE_TIMEOUT = 60  # seconds

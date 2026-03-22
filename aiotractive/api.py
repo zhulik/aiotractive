@@ -18,7 +18,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class API:  # pylint: disable=too-many-instance-attributes
-    API_URL = URL("https://graph.tractive.com/3/")
+    API_URL = URL("https://graph.tractive.com/4/")
 
     DEFAULT_TIMEOUT = 10
 
@@ -45,7 +45,7 @@ class API:  # pylint: disable=too-many-instance-attributes
 
         if self.session is None:
             loop = loop or asyncio.get_event_loop()
-            self.session = aiohttp.ClientSession(raise_for_status=True)
+            self.session = aiohttp.ClientSession()
             self._close_session = True
 
         self._user_credentials = None
@@ -95,6 +95,8 @@ class API:  # pylint: disable=too-many-instance-attributes
                     await asyncio.sleep(delay)
                     return await self.raw_request(uri, params, data, method, attempt=attempt + 1)
                 raise TractiveError("Request limit exceeded")
+
+            response.raise_for_status()
 
             if "Content-Type" in response.headers and "application/json" in response.headers["Content-Type"]:
                 return await response.json()
