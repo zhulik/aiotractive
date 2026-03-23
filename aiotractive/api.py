@@ -125,7 +125,6 @@ class API:
                         attempt=attempt + 1,
                         base_url=base_url,
                     )
-                raise TractiveError("Request limit exceeded")
 
             response.raise_for_status()
 
