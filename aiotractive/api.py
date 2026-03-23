@@ -40,8 +40,9 @@ class API:
         loop: asyncio.AbstractEventLoop | None = None,
         session: aiohttp.ClientSession | None = None,
         retry_count: int = 3,
-        retry_delay: Callable[[int], float] = lambda attempt: 4**attempt
-        + random.uniform(0, 3),  # noqa: S311
+        retry_delay: Callable[[int], float] = lambda attempt: (
+            4**attempt + random.uniform(0, 3)  # noqa: S311
+        ),
     ) -> None:
         """Initialize."""
         self._login = login
@@ -112,19 +113,21 @@ class API:
         ) as response:
             _LOGGER.debug("Request %s, status: %s", response.url, response.status)
 
-            if response.status == HTTPStatus.TOO_MANY_REQUESTS:
-                if attempt <= self.retry_count:
-                    delay = self.retry_delay(attempt)
-                    _LOGGER.info("Request limit exceeded, retrying in %s second", delay)
-                    await asyncio.sleep(delay)
-                    return await self.raw_request(
-                        uri,
-                        params,
-                        data,
-                        method,
-                        attempt=attempt + 1,
-                        base_url=base_url,
-                    )
+            if (
+                response.status == HTTPStatus.TOO_MANY_REQUESTS
+                and attempt <= self.retry_count
+            ):
+                delay = self.retry_delay(attempt)
+                _LOGGER.info("Request limit exceeded, retrying in %s second", delay)
+                await asyncio.sleep(delay)
+                return await self.raw_request(
+                    uri,
+                    params,
+                    data,
+                    method,
+                    attempt=attempt + 1,
+                    base_url=base_url,
+                )
 
             response.raise_for_status()
 
