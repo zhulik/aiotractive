@@ -33,7 +33,7 @@ jobs:
         run: |
           tag="${{ github.event.release.tag_name }}"
           version="${tag#v}"
-          sed -i "s/^    version=\".*\",$/    version=\"${version}\",/" setup.py
+          sed -i "s/^version = \".*\"$/version = \"${version}\"/" pyproject.toml
 
       - name: Build the package
         run: pipenv run make dist
