@@ -20,7 +20,7 @@ class Tracker(DataObject):
         hw_info: dict[str, Any] = await self._api.request(
             f"device_hw_report/{self._id}/"
         )
-        return hw_info
+        return hw_info or {}
 
     async def pos_report(self) -> dict[str, Any]:
         """Get position report for the tracker."""
