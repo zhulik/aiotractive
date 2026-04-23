@@ -40,8 +40,9 @@ class API:
         loop: asyncio.AbstractEventLoop | None = None,
         session: aiohttp.ClientSession | None = None,
         retry_count: int = 3,
-        retry_delay: Callable[[int], float] = lambda attempt: (
-            4**attempt + random.uniform(0, 3)  # noqa: S311
+        retry_delay: Callable[[int], float] = lambda attempt: min(
+            60.0,
+            random.uniform(8.0, 8.0 * (2**attempt - 1)),  # noqa: S311
         ),
     ) -> None:
         """Initialize."""
