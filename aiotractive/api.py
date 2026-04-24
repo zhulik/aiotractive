@@ -14,7 +14,7 @@ import aiohttp
 from aiohttp.client_exceptions import ClientResponseError
 from yarl import URL
 
-from .exceptions import NotFoundError, TractiveError, UnauthorizedError
+from .exceptions import BadRequestError, NotFoundError, TractiveError, UnauthorizedError
 
 CLIENT_ID = "625e533dc3c3b41c28a669f0"
 
@@ -89,6 +89,8 @@ class API:
                 raise UnauthorizedError from error
             if error.status == HTTPStatus.NOT_FOUND:
                 raise NotFoundError from error
+            if error.status == HTTPStatus.BAD_REQUEST:
+                raise BadRequestError from error
             raise TractiveError from error
         except Exception as error:
             raise TractiveError from error
