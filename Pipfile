@@ -12,15 +12,15 @@ aiotractive = {editable = true, path = "."}
 [dev-packages]
 aioresponses="0.7.8"
 build=">=1.2.2"
-prek="0.4.3"
+prek="0.4.4"
 pytest-asyncio="1.4.0"
 pytest-cov="7.1.0"
 pytest="9.0.3"
-ruff="0.15.15"
+ruff="0.15.16"
 setuptools=">=78.1.1"
 tomli=">=2.1.0"
 twine=">=6.0.0"
-ty="0.0.40"
+ty="0.0.44"
 typing-extensions=">=4.14.0"
 wheel=">=0.36.2"
 
