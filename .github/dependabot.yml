@@ -9,7 +9,7 @@ updates:
     groups:
       dev:
         patterns:
-          - "aioresponses"
+          - "aiointercept"
           - "prek"
           - "pytest"
           - "pytest-*"
