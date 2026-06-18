@@ -6,12 +6,10 @@ repos:
         args:
           - --fix
       - id: ruff-format
-  - repo: https://github.com/NSPBot911/ty-pre-commit
-    rev: v0.0.47
+  - repo: https://github.com/astral-sh/ty-pre-commit
+    rev: v0.0.50
     hooks:
-      - id: ty-check
-        args:
-          - --python=venv
+      - id: ty
   - repo: https://github.com/codespell-project/codespell
     rev: v2.4.2
     hooks:
