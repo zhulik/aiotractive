@@ -132,8 +132,8 @@ This library is fully typed and includes a `py.typed` marker for [PEP 561](https
 ## Creating a development environment
 
 ```bash
-python3 -m venv venv
-source venv/bin/activate
+python3 -m venv .venv
+source .venv/bin/activate
 pip install pipenv
 pipenv install --dev
 prek install
