@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 from aiohttp.client_exceptions import ClientResponseError
-from aioresponses import aioresponses
+from aiointercept import aiointercept
 
 from aiotractive import Tractive
 from aiotractive.api import API
@@ -16,14 +16,14 @@ from aiotractive.exceptions import TractiveError
 API_URL = str(API.API_URL)
 
 
-def mock_auth(mock: aioresponses, auth_response: dict[str, Any]) -> None:
-    """Add authentication endpoint mock to aioresponses."""
+def mock_auth(mock: aiointercept, auth_response: dict[str, Any]) -> None:
+    """Add authentication endpoint mock to aiointercept."""
     mock.post(f"{API_URL}auth/token", payload=auth_response)
 
 
 async def test_auth_success(auth_response: dict[str, Any]) -> None:
     """Test successful authentication returns user_id and access_token."""
-    with aioresponses() as mock:
+    async with aiointercept(mock_external_urls=True) as mock:
         mock_auth(mock, auth_response)
 
         async with Tractive("test@example.com", "password") as client:
@@ -39,7 +39,7 @@ async def test_request_retries_429_and_preserves_client_error_cause(
     auth_response: dict[str, Any],
 ) -> None:
     """Test that request() preserves ClientResponseError as TractiveError.__cause__."""
-    with aioresponses() as mock:
+    async with aiointercept(mock_external_urls=True) as mock:
         mock_auth(mock, auth_response)
         url = f"{API_URL}user/{auth_response['user_id']}/trackers"
         mock.get(url, status=HTTPStatus.TOO_MANY_REQUESTS, repeat=True)
