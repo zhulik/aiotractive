@@ -20,7 +20,7 @@ ruff="0.16.0"
 setuptools=">=78.1.1"
 tomli=">=2.1.0"
 twine=">=6.0.0"
-ty="0.0.63"
+ty="0.0.64"
 typing-extensions=">=4.14.0"
 wheel=">=0.36.2"
 
