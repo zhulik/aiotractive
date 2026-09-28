@@ -32,9 +32,7 @@ class Tractive:
             "trackers": {},
             "pets": {},
         }
-        self._update_listener: Callable[
-            [Exception | None], None
-        ] | None = None
+        self._update_listener: Callable[[Exception | None], None] | None = None
         self._background_task: asyncio.Task[None] | None = None
 
     def subscribe_updates(
@@ -51,9 +49,7 @@ class Tractive:
         """Start the background listener for real-time events."""
         if self._background_task is not None:
             return
-        self._background_task = asyncio.create_task(
-            self._async_background_listener()
-        )
+        self._background_task = asyncio.create_task(self._async_background_listener())
 
     async def async_stop_listener(self) -> None:
         """Stop the background listener."""
@@ -123,7 +119,9 @@ class Tractive:
 
         self.status["trackers"].setdefault(tracker_id, {})
 
-        if (hw_time := event["hardware"].get("time")) is not None and self._last_hw_time != hw_time:
+        if (
+            hw_time := event["hardware"].get("time")
+        ) is not None and self._last_hw_time != hw_time:
             self._last_hw_time = hw_time
             hw = event["hardware"]
             self.status["trackers"][tracker_id].update(
@@ -135,7 +133,9 @@ class Tractive:
                 }
             )
 
-        if (pos_time := event["position"].get("time")) is not None and self._last_pos_time != pos_time:
+        if (
+            pos_time := event["position"].get("time")
+        ) is not None and self._last_pos_time != pos_time:
             self._last_pos_time = pos_time
             pos = event["position"]
             latlong = pos.get("latlong", [None, None])
