@@ -124,14 +124,15 @@ class Tractive:
         ) is not None and self._last_hw_time != hw_time:
             self._last_hw_time = hw_time
             hw = event["hardware"]
-            self.status["trackers"][tracker_id].update(
-                {
-                    "battery_level": hw.get("battery_level"),
-                    "tracker_state": event.get("tracker_state", "").lower(),
-                    "power_saving": event.get("tracker_state_reason") == "POWER_SAVING",
-                    "battery_charging": event.get("charging_state") == "CHARGING",
-                }
-            )
+            update: dict[str, Any] = {
+                "battery_level": hw.get("battery_level"),
+                "power_saving": event.get("tracker_state_reason") == "POWER_SAVING",
+                "battery_charging": event.get("charging_state") == "CHARGING",
+            }
+            # Partial hardware events omit tracker_state; keep the last known value.
+            if (tracker_state := event.get("tracker_state")) is not None:
+                update["tracker_state"] = tracker_state.lower()
+            self.status["trackers"][tracker_id].update(update)
 
         if (
             pos_time := event["position"].get("time")
