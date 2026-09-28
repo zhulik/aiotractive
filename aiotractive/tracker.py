@@ -1,14 +1,27 @@
 """Representation of a Tractive tracker device."""
 
-from typing import Any, ClassVar
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from .data_object import DataObject
+
+if TYPE_CHECKING:
+    from .api import API
+    from .models import TrackerStatus
 
 
 class Tracker(DataObject):
     """Representation of a Tractive tracker device."""
 
     ACTIONS: ClassVar[dict[bool, str]] = {True: "on", False: "off"}
+
+    def __init__(
+        self, api: API, data: dict[str, Any], status: TrackerStatus | None = None
+    ) -> None:
+        """Initialize the tracker, optionally bound to a live status."""
+        super().__init__(api, data)
+        self._status = status
 
     async def details(self) -> dict[str, Any]:
         """Get tracker details."""
@@ -27,7 +40,7 @@ class Tracker(DataObject):
         pos_report: dict[str, Any] = await self._api.request(
             f"device_pos_report/{self._id}"
         )
-        return pos_report
+        return pos_report or {}
 
     async def positions(
         self, time_from: float, time_to: float, fmt: str
@@ -48,6 +61,8 @@ class Tracker(DataObject):
         result: dict[str, Any] = await self._api.request(
             f"tracker/{self._id}/command/buzzer_control/{action}"
         )
+        if self._status is not None and result.get("pending"):
+            self._status.buzzer = active
         return result
 
     async def set_led_active(self, active: bool) -> dict[str, Any]:
@@ -56,6 +71,8 @@ class Tracker(DataObject):
         result: dict[str, Any] = await self._api.request(
             f"tracker/{self._id}/command/led_control/{action}"
         )
+        if self._status is not None and result.get("pending"):
+            self._status.led = active
         return result
 
     async def set_live_tracking_active(self, active: bool) -> dict[str, Any]:
@@ -64,4 +81,6 @@ class Tracker(DataObject):
         result: dict[str, Any] = await self._api.request(
             f"tracker/{self._id}/command/live_tracking/{action}"
         )
+        if self._status is not None and result.get("pending"):
+            self._status.live_tracking = active
         return result
