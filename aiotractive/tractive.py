@@ -64,8 +64,13 @@ class Tractive:
         self._update_listener = update_listener
 
     def _notify(self, exc: Exception | None) -> None:
-        if self._update_listener:
+        """Call the update listener, logging (not propagating) its errors."""
+        if self._update_listener is None:
+            return
+        try:
             self._update_listener(exc)
+        except Exception:  # a listener bug must not stop the loop
+            _LOGGER.exception("Error in update listener")
 
     def _handle_connected(self) -> None:
         self._notify(None)
@@ -102,9 +107,7 @@ class Tractive:
                         try:
                             self._update_status(event)
                         except (KeyError, TypeError, AttributeError, ValueError) as err:
-                            _LOGGER.warning(
-                                "Ignoring malformed event %s: %s", event, err
-                            )
+                            _LOGGER.warning("Ignoring malformed event: %s", err)
                             continue
                         self._notify(None)
             except UnauthorizedError as exc:

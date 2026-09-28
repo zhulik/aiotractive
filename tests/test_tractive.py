@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
+import logging
 from collections.abc import AsyncGenerator
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -283,7 +284,7 @@ def test_update_status_health_overview_without_pet_id(
     ],
 )
 async def test_listen_skips_malformed_event(
-    client: Tractive, malformed: dict[str, Any]
+    client: Tractive, malformed: dict[str, Any], caplog: pytest.LogCaptureFixture
 ) -> None:
     """Test that a malformed event is skipped and later events still notify."""
     listener = MagicMock()
@@ -291,11 +292,43 @@ async def test_listen_skips_malformed_event(
     error = UnauthorizedError("bye")
     channel_cls = mock_channel(events_then_raise([malformed, FULL_EVENT], error))
 
-    with patch("aiotractive.tractive.Channel", channel_cls):
+    with (
+        patch("aiotractive.tractive.Channel", channel_cls),
+        caplog.at_level(logging.DEBUG, logger="aiotractive.tractive"),
+    ):
         await client.listen()
 
     assert [c.args for c in listener.call_args_list] == [(None,), (error,)]
     assert client.status.trackers[TRACKER_ID].battery_level == 80
+    warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert len(warnings) == 1
+    assert TRACKER_ID not in warnings[0].getMessage()
+    debugs = [r for r in caplog.records if r.levelno == logging.DEBUG]
+    assert any(TRACKER_ID in r.getMessage() for r in debugs)
+
+
+async def test_listen_listener_error_is_logged(
+    client: Tractive, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Test that a raising listener is logged and not treated as a channel error."""
+    listener = MagicMock(side_effect=[RuntimeError("listener bug"), None, None])
+    client.subscribe_updates(listener)
+    error = UnauthorizedError("bye")
+    channel_cls = mock_channel(events_then_raise([FULL_EVENT, FULL_EVENT], error))
+
+    with (
+        patch("aiotractive.tractive.Channel", channel_cls),
+        patch("aiotractive.tractive.asyncio.sleep", AsyncMock()) as sleep,
+    ):
+        await client.listen()
+
+    assert [c.args for c in listener.call_args_list] == [(None,), (None,), (error,)]
+    assert channel_cls.call_count == 1
+    sleep.assert_not_called()
+    assert any(
+        r.levelno == logging.ERROR and "listener" in r.getMessage()
+        for r in caplog.records
+    )
 
 
 async def test_listen_reconnects_after_error(client: Tractive) -> None:
