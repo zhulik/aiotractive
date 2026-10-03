@@ -107,7 +107,10 @@ class Tractive:
                         try:
                             self._update_status(event)
                         except (KeyError, TypeError, AttributeError, ValueError) as err:
+                            # The event may contain the pet position; log it
+                            # only at debug level.
                             _LOGGER.warning("Ignoring malformed event: %s", err)
+                            _LOGGER.debug("Malformed event: %s", event)
                             continue
                         self._notify(None)
             except UnauthorizedError as exc:
