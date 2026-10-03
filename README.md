@@ -64,9 +64,8 @@ tracker = trackers[0]
 tracker = client.tracker("TRACKER_ID")
 
 # Retrieve details
-await (
-    tracker.details()
-)  # Includes device capabilities, battery status (not level), charging state and so on
+# Includes device capabilities, battery status (not level), charging state and so on
+await tracker.details()
 
 await tracker.hw_info()  # Includes battery level, firmware version, model and so on
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field, fields
+from dataclasses import dataclass, field
 from typing import Any
 
 LATLONG_LENGTH = 2
@@ -116,26 +116,6 @@ def update_tracker_switches(status: TrackerStatus, event: dict[str, Any]) -> Non
         status.power_saving_zone = hw["power_saving_zone_id"] is not None
 
 
-def update_tracker_from_event(
-    status: TrackerStatus,
-    event: dict[str, Any],
-    *,
-    apply_hardware: bool = True,
-    apply_position: bool = True,
-) -> None:
-    """Apply a tracker event to the status.
-
-    ``apply_hardware`` and ``apply_position`` let the caller skip blocks that
-    were already applied (deduplication by timestamp). Switch data and the
-    power saving zone are always applied.
-    """
-    if apply_hardware:
-        update_tracker_hardware(status, event)
-    if apply_position:
-        update_tracker_position(status, event)
-    update_tracker_switches(status, event)
-
-
 def update_pet_from_health_overview(status: PetStatus, data: dict[str, Any]) -> None:
     """Apply a health overview payload to the pet status.
 
@@ -151,17 +131,17 @@ def update_pet_from_health_overview(status: PetStatus, data: dict[str, Any]) -> 
     status.minutes_rest = sleep.get("minutesCalm")
 
 
-def tracker_status_from_rest(
+def update_tracker_from_rest(
+    status: TrackerStatus,
     details: dict[str, Any],
     hw_info: dict[str, Any],
     pos_report: dict[str, Any],
-) -> TrackerStatus:
-    """Build a tracker status from REST payloads.
+) -> None:
+    """Apply REST payloads to the tracker status.
 
-    Switch states (buzzer, LED, live tracking) are not available via REST and
-    stay ``None``.
+    Missing keys keep the last known value. Switch states (buzzer, LED, live
+    tracking) are not available via REST.
     """
-    status = TrackerStatus()
     if "battery_level" in hw_info:
         status.battery_level = hw_info["battery_level"]
     if (state := details.get("state")) is not None:
@@ -179,12 +159,3 @@ def tracker_status_from_rest(
         status.accuracy = pos_report["pos_uncertainty"]
     if "sensor_used" in pos_report:
         status.sensor_used = pos_report["sensor_used"]
-    return status
-
-
-def merge_tracker_status(target: TrackerStatus, source: TrackerStatus) -> None:
-    """Copy every non-``None`` field of ``source`` into ``target``."""
-    for status_field in fields(TrackerStatus):
-        value = getattr(source, status_field.name)
-        if value is not None:
-            setattr(target, status_field.name, value)

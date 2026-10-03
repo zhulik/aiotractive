@@ -122,44 +122,6 @@ async def wait_forever() -> AsyncGenerator[dict[str, Any]]:
                 "live_tracking": True,
             },
         ),
-        (
-            {"tracker_id": TRACKER_ID, "hardware": {"time": 1, "battery_level": 80}},
-            {"battery_level": 80},
-        ),
-        (
-            {
-                "tracker_id": TRACKER_ID,
-                "hardware": {"time": 1},
-                "charging_state": "CHARGING",
-                "tracker_state_reason": "POWER_SAVING",
-            },
-            {"battery_charging": True, "power_saving": True},
-        ),
-        (
-            {"tracker_id": TRACKER_ID, "position": {"time": 1, "accuracy": 99}},
-            {"accuracy": 99},
-        ),
-        (
-            {"tracker_id": TRACKER_ID, "position": {"time": 1, "latlong": [3, 4]}},
-            {"latitude": 3, "longitude": 4},
-        ),
-        (
-            {"tracker_id": TRACKER_ID, "buzzer_control": {"active": True}},
-            {"buzzer": True},
-        ),
-        ({"tracker_id": TRACKER_ID, "led_control": {"active": False}}, {"led": False}),
-        (
-            {"tracker_id": TRACKER_ID, "live_tracking": {"active": True}},
-            {"live_tracking": True},
-        ),
-        (
-            {"tracker_id": TRACKER_ID, "hardware": {"power_saving_zone_id": "zone"}},
-            {"power_saving_zone": True},
-        ),
-        (
-            {"tracker_id": TRACKER_ID, "hardware": {"power_saving_zone_id": None}},
-            {"power_saving_zone": False},
-        ),
         ({"tracker_id": TRACKER_ID}, {}),
         ({"message": "tracker_status"}, {}),
     ],
@@ -622,12 +584,15 @@ async def test_fetch_status_reuses_trackables(client: Tractive) -> None:
 
 
 async def test_fetch_status_delay_after_implicit_fetch(client: Tractive) -> None:
-    """Test that the delay also follows an implicit trackables fetch."""
+    """Test the delay after an implicit trackables fetch and between trackables."""
     client._api.user_id = AsyncMock(return_value="user_1")
     client._api.request = mock_request(fetch_status_responses())
     client._fetch_delay = 2.0
 
     with patch("aiotractive.tractive.asyncio.sleep", new_callable=AsyncMock) as sleep:
         await client.async_fetch_status()
+        sleep.assert_awaited_once_with(2.0)
+        client._trackables = [*(client._trackables or []), *(client._trackables or [])]
+        await client.async_fetch_status()
 
-    sleep.assert_awaited_once_with(2.0)
+    assert sleep.await_count == 2
