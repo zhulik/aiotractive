@@ -6,6 +6,7 @@ import asyncio
 import contextlib
 import logging
 from collections.abc import AsyncIterator, Callable
+from functools import partial
 from types import TracebackType
 from typing import Any
 
@@ -17,10 +18,11 @@ from .models import (
     Trackable,
     TrackerStatus,
     TractiveStatus,
-    merge_tracker_status,
-    tracker_status_from_rest,
     update_pet_from_health_overview,
-    update_tracker_from_event,
+    update_tracker_from_rest,
+    update_tracker_hardware,
+    update_tracker_position,
+    update_tracker_switches,
 )
 from .trackable_object import TrackableObject
 from .tracker import Tracker
@@ -28,6 +30,14 @@ from .tracker import Tracker
 _LOGGER = logging.getLogger(__name__)
 
 RECONNECT_INTERVAL = 10
+
+
+def _is_new(cache: dict[str, float], tracker_id: str, timestamp: float | None) -> bool:
+    """Return whether the timestamp is new for the tracker, and remember it."""
+    if timestamp is None or cache.get(tracker_id) == timestamp:
+        return False
+    cache[tracker_id] = timestamp
+    return True
 
 
 class Tractive:
@@ -72,9 +82,6 @@ class Tractive:
         except Exception:  # a listener bug must not stop the loop
             _LOGGER.exception("Error in update listener")
 
-    def _handle_connected(self) -> None:
-        self._notify(None)
-
     async def async_start_listener(self) -> None:
         """Start the background listener for real-time events."""
         if self._background_task is not None and not self._background_task.done():
@@ -101,7 +108,7 @@ class Tractive:
             self._last_hw_time.clear()
             self._last_pos_time.clear()
             try:
-                channel = Channel(self._api, on_connected=self._handle_connected)
+                channel = Channel(self._api, on_connected=partial(self._notify, None))
                 async with contextlib.aclosing(channel.listen()) as events:
                     async for event in events:
                         try:
@@ -138,25 +145,12 @@ class Tractive:
         status = self.status.trackers.setdefault(tracker_id, TrackerStatus())
 
         hw_time = (event.get("hardware") or {}).get("time")
-        apply_hardware = (
-            hw_time is not None and self._last_hw_time.get(tracker_id) != hw_time
-        )
-        if apply_hardware:
-            self._last_hw_time[tracker_id] = hw_time
-
+        if _is_new(self._last_hw_time, tracker_id, hw_time):
+            update_tracker_hardware(status, event)
         pos_time = (event.get("position") or {}).get("time")
-        apply_position = (
-            pos_time is not None and self._last_pos_time.get(tracker_id) != pos_time
-        )
-        if apply_position:
-            self._last_pos_time[tracker_id] = pos_time
-
-        update_tracker_from_event(
-            status,
-            event,
-            apply_hardware=apply_hardware,
-            apply_position=apply_position,
-        )
+        if _is_new(self._last_pos_time, tracker_id, pos_time):
+            update_tracker_position(status, event)
+        update_tracker_switches(status, event)
 
     async def async_fetch_trackables(self) -> list[Trackable]:
         """Fetch the pets that have a tracker assigned, with their details.
@@ -205,11 +199,12 @@ class Tractive:
         seconds between trackables; the cached tracker details are refreshed.
         Fields not provided by REST (switch states) keep their last value.
         """
-        fetched_trackables = self._trackables is None
-        if fetched_trackables:
+        if self._trackables is None:
             await self.async_fetch_trackables()
+            if self._fetch_delay:
+                await asyncio.sleep(self._fetch_delay)
         for index, trackable in enumerate(self._trackables or []):
-            if (index or fetched_trackables) and self._fetch_delay:
+            if index and self._fetch_delay:
                 await asyncio.sleep(self._fetch_delay)
             tracker = self.tracker(trackable.tracker_id)
             tracker_details = await tracker.details()
@@ -217,9 +212,11 @@ class Tractive:
             hw_info = await tracker.hw_info()
             pos_report = await tracker.pos_report()
             health = await self.trackable_object(trackable.pet_id).health_overview()
-            merge_tracker_status(
+            update_tracker_from_rest(
                 self.status.trackers.setdefault(trackable.tracker_id, TrackerStatus()),
-                tracker_status_from_rest(tracker_details, hw_info, pos_report),
+                tracker_details,
+                hw_info,
+                pos_report,
             )
             if health:
                 update_pet_from_health_overview(
@@ -233,7 +230,7 @@ class Tractive:
 
     async def trackers(self) -> list[Tracker]:
         """Get all trackers for the authenticated user."""
-        trackers_list: list[dict[str, Any]] = await self._api.request(
+        trackers: list[dict[str, Any]] = await self._api.request(
             f"user/{await self._api.user_id()}/trackers"
         )
         return [
@@ -242,7 +239,7 @@ class Tractive:
                 t,
                 status=self.status.trackers.setdefault(t["_id"], TrackerStatus()),
             )
-            for t in trackers_list
+            for t in trackers
         ]
 
     def tracker(self, tracker_id: str) -> Tracker:
@@ -259,10 +256,10 @@ class Tractive:
 
     async def trackable_objects(self) -> list[TrackableObject]:
         """Get all trackable objects for the authenticated user."""
-        trackable_objects_list: list[dict[str, Any]] = await self._api.request(
+        trackable_objects: list[dict[str, Any]] = await self._api.request(
             f"user/{await self._api.user_id()}/trackable_objects"
         )
-        return [TrackableObject(self._api, t) for t in trackable_objects_list]
+        return [TrackableObject(self._api, t) for t in trackable_objects]
 
     async def events(self) -> AsyncIterator[dict[str, Any]]:
         """Listen for real-time events from the Tractive API."""

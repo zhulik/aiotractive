@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
 from typing import Any
 
 import pytest
@@ -12,10 +11,8 @@ from aiotractive.models import (
     Trackable,
     TrackerStatus,
     TractiveStatus,
-    merge_tracker_status,
-    tracker_status_from_rest,
     update_pet_from_health_overview,
-    update_tracker_from_event,
+    update_tracker_from_rest,
     update_tracker_hardware,
     update_tracker_position,
     update_tracker_switches,
@@ -250,39 +247,6 @@ def test_update_tracker_switches_power_saving_zone(
 
 
 @pytest.mark.parametrize(
-    ("apply_hardware", "apply_position", "battery_level", "latitude"),
-    [
-        (True, True, 42, 50.5),
-        (False, True, 10, 50.5),
-        (True, False, 42, 1.0),
-        (False, False, 10, 1.0),
-    ],
-)
-def test_update_tracker_from_event(
-    apply_hardware: bool,
-    apply_position: bool,
-    battery_level: int,
-    latitude: float,
-) -> None:
-    """Test that skipped blocks are ignored while switches are always applied."""
-    status = _previous()
-    event = {
-        "hardware": {"battery_level": 42, "power_saving_zone_id": "zone"},
-        "position": {"latlong": [50.5, 19.5]},
-        "buzzer_control": {"active": True},
-    }
-
-    update_tracker_from_event(
-        status, event, apply_hardware=apply_hardware, apply_position=apply_position
-    )
-
-    assert status.battery_level == battery_level
-    assert status.latitude == latitude
-    assert status.buzzer is True
-    assert status.power_saving_zone is True
-
-
-@pytest.mark.parametrize(
     ("data", "expected"),
     [
         (load_fixture("health_overview"), PetStatus(200, 150, 100, 300, 122)),
@@ -314,9 +278,12 @@ def test_update_pet_from_health_overview(
     assert status == expected
 
 
-def test_tracker_status_from_rest_fixtures() -> None:
-    """Test building a status from real REST payloads."""
-    status = tracker_status_from_rest(
+def test_update_tracker_from_rest_fixtures() -> None:
+    """Test applying real REST payloads; switch states keep their value."""
+    status = _previous()
+
+    update_tracker_from_rest(
+        status,
         load_fixture("tracker_details"),
         load_fixture("tracker_hw_info"),
         load_fixture("tracker_pos_report"),
@@ -332,12 +299,19 @@ def test_tracker_status_from_rest_fixtures() -> None:
         longitude=44.555555,
         accuracy=30,
         sensor_used="KNOWN_WIFI",
+        buzzer=False,
+        led=False,
+        live_tracking=False,
     )
 
 
-def test_tracker_status_from_rest_empty() -> None:
-    """Test that empty REST payloads yield an all-None status."""
-    assert tracker_status_from_rest({}, {}, {}) == TrackerStatus()
+def test_update_tracker_from_rest_empty() -> None:
+    """Test that empty REST payloads keep every previous value."""
+    status = _previous()
+
+    update_tracker_from_rest(status, {}, {}, {})
+
+    assert status == _previous()
 
 
 @pytest.mark.parametrize(
@@ -348,26 +322,18 @@ def test_tracker_status_from_rest_empty() -> None:
         ({}, {"power_saving_zone_id": None}, "power_saving_zone", False),
     ],
 )
-def test_tracker_status_from_rest_flags(
+def test_update_tracker_from_rest_flags(
     details: dict[str, Any],
     hw_info: dict[str, Any],
     field: str,
     expected: bool,
 ) -> None:
     """Test derivation of boolean flags from REST payloads."""
-    status = tracker_status_from_rest(details, hw_info, {})
+    status = TrackerStatus()
+
+    update_tracker_from_rest(status, details, hw_info, {})
 
     assert getattr(status, field) is expected
-
-
-def test_merge_tracker_status() -> None:
-    """Test that only non-None source fields are copied into the target."""
-    target = _previous()
-    source = TrackerStatus(battery_level=99, buzzer=True)
-
-    merge_tracker_status(target, source)
-
-    assert target == replace(_previous(), battery_level=99, buzzer=True)
 
 
 def test_trackable_name() -> None:

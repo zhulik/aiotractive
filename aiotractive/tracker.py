@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from .data_object import DataObject
+from .models import SWITCH_EVENT_KEYS
 
 if TYPE_CHECKING:
     from .api import API
@@ -55,32 +56,22 @@ class Tracker(DataObject):
         positions: dict[str, Any] = await self._api.request(url, params=params)
         return positions
 
-    async def set_buzzer_active(self, active: bool) -> dict[str, Any]:
-        """Enable or disable the buzzer on the tracker."""
-        action = self.ACTIONS[active]
+    async def _set_switch(self, command: str, active: bool) -> dict[str, Any]:
         result: dict[str, Any] = await self._api.request(
-            f"tracker/{self._id}/command/buzzer_control/{action}"
+            f"tracker/{self._id}/command/{command}/{self.ACTIONS[active]}"
         )
         if self._status is not None and result.get("pending"):
-            self._status.buzzer = active
+            setattr(self._status, SWITCH_EVENT_KEYS[command], active)
         return result
+
+    async def set_buzzer_active(self, active: bool) -> dict[str, Any]:
+        """Enable or disable the buzzer on the tracker."""
+        return await self._set_switch("buzzer_control", active)
 
     async def set_led_active(self, active: bool) -> dict[str, Any]:
         """Enable or disable the LED on the tracker."""
-        action = self.ACTIONS[active]
-        result: dict[str, Any] = await self._api.request(
-            f"tracker/{self._id}/command/led_control/{action}"
-        )
-        if self._status is not None and result.get("pending"):
-            self._status.led = active
-        return result
+        return await self._set_switch("led_control", active)
 
     async def set_live_tracking_active(self, active: bool) -> dict[str, Any]:
         """Enable or disable live tracking mode on the tracker."""
-        action = self.ACTIONS[active]
-        result: dict[str, Any] = await self._api.request(
-            f"tracker/{self._id}/command/live_tracking/{action}"
-        )
-        if self._status is not None and result.get("pending"):
-            self._status.live_tracking = active
-        return result
+        return await self._set_switch("live_tracking", active)
