@@ -1,0 +1,12 @@
+{
+  "petId": "pet_id_123",
+  "sleep": {
+    "minutesDaySleep": 100,
+    "minutesNightSleep": 300,
+    "minutesCalm": 122
+  },
+  "activity": {
+    "minutesGoal": 200,
+    "minutesActive": 150
+  }
+}
