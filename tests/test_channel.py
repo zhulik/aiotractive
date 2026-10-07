@@ -7,10 +7,10 @@ import contextlib
 from asyncio.exceptions import TimeoutError as AIOTimeoutError
 from http import HTTPStatus
 from typing import Any, cast
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, call
 
 import pytest
-from aiohttp import ClientResponse
+from aiohttp import ClientPayloadError, ClientResponse, ServerDisconnectedError
 from aiohttp.client_exceptions import ClientResponseError
 
 from aiotractive.channel import Channel
@@ -34,10 +34,12 @@ def channel(mock_api: MagicMock) -> Channel:
     return Channel(mock_api)
 
 
-def create_mock_response(events: list[bytes]) -> MagicMock:
+def create_mock_response(
+    events: list[bytes], raise_after: Exception | None = None
+) -> MagicMock:
     """Create a mock response with async iterator over events."""
     response = MagicMock(spec=ClientResponse)
-    response.content = AsyncIterator(events)
+    response.content = AsyncIterator(events, raise_after)
     response.status = 200
     response.request_info = MagicMock()
     response.history = ()
@@ -48,9 +50,12 @@ def create_mock_response(events: list[bytes]) -> MagicMock:
 class AsyncIterator:
     """Async iterator for mocking response.content."""
 
-    def __init__(self, items: list[bytes]) -> None:
+    def __init__(
+        self, items: list[bytes], raise_after: Exception | None = None
+    ) -> None:
         """Initialize."""
         self.items = iter(items)
+        self._raise_after = raise_after
         self._exhausted = asyncio.Event()
 
     def __aiter__(self) -> AsyncIterator:
@@ -62,6 +67,8 @@ class AsyncIterator:
         try:
             return next(self.items)
         except StopIteration:
+            if self._raise_after is not None:
+                raise self._raise_after from None
             # Block indefinitely until cancelled, simulating waiting for more data
             await self._exhausted.wait()
             raise StopAsyncIteration from None
@@ -493,3 +500,119 @@ async def test_listen_disconnected_cleans_up(
         await task
 
     assert_internal_tasks_done(channel)
+
+
+def create_mock_context(
+    events: list[bytes], raise_after: Exception | None = None
+) -> AsyncMock:
+    """Create a request context manager yielding a mock response."""
+    mock_context = AsyncMock()
+    mock_context.__aenter__.return_value = create_mock_response(events, raise_after)
+    return mock_context
+
+
+def drain(channel: Channel) -> list[dict[str, Any]]:
+    """Return all items currently in the channel queue."""
+    items = []
+    while not channel._queue.empty():
+        items.append(channel._queue.get_nowait())
+    return items
+
+
+async def run_listen(channel: Channel) -> None:
+    """Run _listen briefly, then cancel it."""
+    task = asyncio.create_task(channel._listen())
+    await asyncio.sleep(0.3)
+    task.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await task
+
+
+STREAM_CLOSED_ERRORS = [
+    ClientPayloadError("Response payload is not completed"),
+    ServerDisconnectedError(),
+]
+
+
+@pytest.mark.parametrize("stream_error", STREAM_CLOSED_ERRORS)
+async def test_listen_stream_closed_after_data_reconnects_silently(
+    mock_api: MagicMock, stream_error: Exception
+) -> None:
+    """Test that a stream closed after data reconnects without error or backoff."""
+    on_connected = MagicMock()
+    channel = Channel(mock_api, on_connected=on_connected)
+    mock_api.session.request.side_effect = [
+        create_mock_context(
+            [b'{"message": "handshake"}', b'{"message": "position", "id": "1"}'],
+            stream_error,
+        ),
+        create_mock_context(
+            [b'{"message": "handshake"}', b'{"message": "position", "id": "2"}']
+        ),
+    ]
+
+    await run_listen(channel)
+
+    items = [item for item in drain(channel) if item["type"] != "cancelled"]
+    assert [item["type"] for item in items] == ["event", "event"]
+    assert [item["event"]["id"] for item in items] == ["1", "2"]
+    assert on_connected.call_count == 2
+    mock_api.retry_delay.assert_not_called()
+    assert mock_api.session.request.call_count == 2
+
+
+@pytest.mark.parametrize("stream_error", STREAM_CLOSED_ERRORS)
+async def test_listen_stream_closed_before_data_backs_off_then_errors(
+    mock_api: MagicMock, stream_error: Exception
+) -> None:
+    """Test that a stream closed before any data backs off and then gives up."""
+    mock_api.retry_count = 2
+    mock_api.retry_delay.return_value = 0
+    channel = Channel(mock_api)
+    mock_api.session.request.side_effect = [
+        create_mock_context([], stream_error) for _ in range(3)
+    ]
+
+    await run_listen(channel)
+
+    items = drain(channel)
+    assert len(items) == 1
+    assert items[0]["type"] == "error"
+    assert isinstance(items[0]["error"], TractiveError)
+    assert items[0]["error"].__cause__ is stream_error
+    assert mock_api.retry_delay.call_args_list == [call(1), call(2)]
+    assert mock_api.session.request.call_count == 3
+
+
+async def test_listen_retry_counter_resets_after_successful_connection(
+    mock_api: MagicMock,
+) -> None:
+    """Test that receiving data resets the retry counter."""
+    mock_api.retry_count = 1
+    mock_api.retry_delay.return_value = 0
+    channel = Channel(mock_api)
+
+    def server_error() -> ClientResponseError:
+        return ClientResponseError(
+            request_info=MagicMock(),
+            history=(),
+            status=HTTPStatus.INTERNAL_SERVER_ERROR,
+            message="Internal Server Error",
+        )
+
+    mock_api.session.request.side_effect = [
+        server_error(),
+        create_mock_context(
+            [b'{"message": "position", "id": "1"}'],
+            ClientPayloadError("Response payload is not completed"),
+        ),
+        server_error(),
+        create_mock_context([b'{"message": "position", "id": "2"}']),
+    ]
+
+    await run_listen(channel)
+
+    items = [item for item in drain(channel) if item["type"] != "cancelled"]
+    assert [item["type"] for item in items] == ["event", "event"]
+    assert mock_api.retry_delay.call_args_list == [call(1), call(1)]
+    assert mock_api.session.request.call_count == 4
