@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from aiotractive import PetStatus, TrackerStatus, Tractive
-from aiotractive.exceptions import TractiveError, UnauthorizedError
+from aiotractive.exceptions import ForbiddenError, TractiveError, UnauthorizedError
 
 from .conftest import load_fixture
 
@@ -467,10 +467,13 @@ def test_tracker_bound_to_status(client: Tractive) -> None:
 
 
 def mock_request(responses: dict[str, Any]) -> AsyncMock:
-    """Return an API request mock that answers by URL."""
+    """Return an API request mock that answers (or raises) by URL."""
 
     async def request(url: str, **_kwargs: Any) -> Any:  # noqa: ANN401
-        return responses[url]
+        response = responses[url]
+        if isinstance(response, Exception):
+            raise response
+        return response
 
     return AsyncMock(side_effect=request)
 
@@ -528,12 +531,19 @@ async def test_fetch_trackables_incomplete_tracker(client: Tractive) -> None:
     [
         (load_fixture("health_overview"), {PET_ID: FULL_PET_STATUS}),
         ({}, {}),
+        (ForbiddenError(), {}),
     ],
 )
 async def test_fetch_status(
-    client: Tractive, health: dict[str, Any], expected_pets: dict[str, PetStatus]
+    client: Tractive,
+    health: dict[str, Any] | Exception,
+    expected_pets: dict[str, PetStatus],
 ) -> None:
-    """Test that the REST refresh fills the status and keeps switch states."""
+    """Test that the REST refresh fills the status and keeps switch states.
+
+    A pet whose health overview is not accessible (inactive tracker
+    subscription) gets no pet status but its tracker is still refreshed.
+    """
     client._api.user_id = AsyncMock(return_value="user_1")
     client._api.request = mock_request(
         {

@@ -30,7 +30,7 @@ urls = { Homepage = "https://github.com/zhulik/aiotractive" }
 include = ["aiotractive*"]
 
 [tool.ruff]
-target-version = "py314"
+target-version = "py310"
 
 lint.select = ["ALL"]
 
