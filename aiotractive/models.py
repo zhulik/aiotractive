@@ -108,8 +108,16 @@ def update_tracker_switches(status: TrackerStatus, event: dict[str, Any]) -> Non
     """Apply switch (buzzer/LED/live tracking) and power saving zone data."""
     for event_key, status_key in SWITCH_EVENT_KEYS.items():
         switch_data = event.get(event_key)
-        if switch_data is not None:
-            setattr(status, status_key, switch_data.get("active"))
+        if switch_data is None:
+            continue
+
+        active = switch_data.get("active")
+        # The API keeps reporting a timed out LED or buzzer as active, with no
+        # time remaining
+        if event_key != "live_tracking" and switch_data.get("remaining") == 0:
+            active = False
+
+        setattr(status, status_key, active)
 
     hw = event.get("hardware")
     if hw and "power_saving_zone_id" in hw:

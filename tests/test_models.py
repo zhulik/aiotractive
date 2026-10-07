@@ -225,6 +225,33 @@ def test_update_tracker_switches(
 
 
 @pytest.mark.parametrize(
+    ("event_key", "field", "expired"),
+    [
+        ("buzzer_control", "buzzer", False),
+        ("led_control", "led", False),
+        ("live_tracking", "live_tracking", True),
+    ],
+)
+def test_update_tracker_switches_timed_switch_expired(
+    event_key: str,
+    field: str,
+    expired: bool,
+) -> None:
+    """Test that a timed out LED or buzzer is off; live tracking is not timed."""
+    status = TrackerStatus()
+
+    update_tracker_switches(
+        status, {event_key: {"active": True, "timeout": 900, "remaining": 896}}
+    )
+    assert getattr(status, field) is True
+
+    update_tracker_switches(
+        status, {event_key: {"active": True, "timeout": 900, "remaining": 0}}
+    )
+    assert getattr(status, field) is expired
+
+
+@pytest.mark.parametrize(
     ("event", "expected"),
     [
         ({"hardware": {"power_saving_zone_id": "zone"}}, True),
