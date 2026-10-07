@@ -72,7 +72,7 @@ class Channel:
                     task.cancel()
                     await asyncio.wait([task])
 
-    async def _listen(self) -> None:  # noqa: PLR0912
+    async def _listen(self) -> None:  # noqa: PLR0911, PLR0912, PLR0915
         if TYPE_CHECKING:
             assert self._api.session is not None
 
@@ -81,6 +81,7 @@ class Channel:
         attempt = 0
         while True:
             attempt += 1
+            received_data = False
             try:
                 async with self._api.session.request(
                     "POST",
@@ -96,6 +97,9 @@ class Channel:
                 ) as response:
                     response.raise_for_status()
                     async for data in response.content:
+                        if not received_data:
+                            received_data = True
+                            attempt = 0
                         event = orjson.loads(data)
                         if event["message"] == "keep-alive":
                             self._last_keep_alive = time.time()
@@ -110,6 +114,21 @@ class Channel:
                         await self._queue.put({"type": "event", "event": event})
             except AIOTimeoutError:
                 continue
+            except (
+                aiohttp.ClientPayloadError,
+                aiohttp.ServerDisconnectedError,
+            ) as error:
+                # The server periodically closes the long-lived stream without
+                # a terminating chunk; that is normal, not a failure.
+                if received_data:
+                    continue
+                if attempt <= self._retry_count:
+                    await asyncio.sleep(self._retry_delay(attempt))
+                    continue
+                exc = TractiveError(str(error))
+                exc.__cause__ = error
+                await self._queue.put({"type": "error", "error": exc})
+                return
             except ClientResponseError as error:
                 if error.status in (HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN):
                     # Non-recoverable failures
