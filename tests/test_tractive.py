@@ -160,7 +160,6 @@ def test_update_status_clears_charging_and_power_saving(client: Tractive) -> Non
 
 def test_update_status_leaves_power_saving_without_reason(client: Tractive) -> None:
     """Test fresh hardware events leaving power saving without an explicit reason."""
-    # Reduced from home-assistant/core#152821 (comment 3334237646).
     client._update_status(
         {
             "message": "tracker_status",
