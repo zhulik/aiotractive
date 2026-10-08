@@ -571,7 +571,10 @@ async def test_fetch_status_uses_fresh_details(client: Tractive) -> None:
 
 
 async def test_fetch_status_reuses_trackables(client: Tractive) -> None:
-    """Test that a second refresh does not fetch the trackable objects again."""
+    """Test that a second refresh does not fetch the trackable objects again.
+
+    Tracker details from the implicit trackables fetch are reused once.
+    """
     client._api.user_id = AsyncMock(return_value="user_1")
     client._api.request = mock_request(fetch_status_responses())
 
@@ -580,7 +583,47 @@ async def test_fetch_status_reuses_trackables(client: Tractive) -> None:
 
     urls = [c.args[0] for c in client._api.request.await_args_list]
     assert urls.count("user/user_1/trackable_objects") == 1
-    assert urls.count("tracker/device_id_123") == 3
+    assert urls.count("tracker/device_id_123") == 2
+
+
+async def test_fetch_status_reuses_details_after_fetch_trackables(
+    client: Tractive,
+) -> None:
+    """Test that only the first refresh after fetching trackables reuses details."""
+    client._api.user_id = AsyncMock(return_value="user_1")
+    client._api.request = mock_request(fetch_status_responses())
+
+    await client.async_fetch_trackables()
+    status = await client.async_fetch_status()
+
+    urls = [c.args[0] for c in client._api.request.await_args_list]
+    assert urls.count("tracker/device_id_123") == 1
+    assert status.trackers["device_id_123"].tracker_state == "operational"
+    assert status.trackers["device_id_123"].battery_charging is False
+
+    await client.async_fetch_status()
+
+    urls = [c.args[0] for c in client._api.request.await_args_list]
+    assert urls.count("tracker/device_id_123") == 2
+    assert client._trackables is not None
+    assert client._trackables[0].tracker_details == load_fixture("tracker_details")
+
+
+async def test_fetch_status_error_clears_details_reuse(client: Tractive) -> None:
+    """Test that an error in the first refresh does not keep reusing cached details."""
+    client._api.user_id = AsyncMock(return_value="user_1")
+    request = mock_request(fetch_status_responses())
+    client._api.request = request
+
+    await client.async_fetch_trackables()
+    client._api.request = AsyncMock(side_effect=TractiveError("boom"))
+    with pytest.raises(TractiveError):
+        await client.async_fetch_status()
+    client._api.request = request
+    await client.async_fetch_status()
+
+    urls = [c.args[0] for c in request.await_args_list]
+    assert urls.count("tracker/device_id_123") == 2
 
 
 async def test_fetch_status_delay_after_implicit_fetch(client: Tractive) -> None:

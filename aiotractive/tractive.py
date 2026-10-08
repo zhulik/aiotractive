@@ -58,6 +58,7 @@ class Tractive:
         self._fetch_delay = fetch_delay
         self.status: TractiveStatus = TractiveStatus()
         self._trackables: list[Trackable] | None = None
+        self._details_fresh = False
         self._last_hw_time: dict[str, float] = {}
         self._last_pos_time: dict[str, float] = {}
         self._update_listener: Callable[[Exception | None], None] | None = None
@@ -156,7 +157,8 @@ class Tractive:
         """Fetch the pets that have a tracker assigned, with their details.
 
         Requests are sequential with ``fetch_delay`` seconds between
-        trackables. The result is cached for ``async_fetch_status``.
+        trackables. The result is cached for ``async_fetch_status``; the first
+        ``async_fetch_status`` after this call reuses the fetched tracker details.
         """
         trackables: list[Trackable] = []
         for index, obj in enumerate(await self.trackable_objects()):
@@ -189,6 +191,7 @@ class Tractive:
                 )
             )
         self._trackables = trackables
+        self._details_fresh = True
         return trackables
 
     async def async_fetch_status(self) -> TractiveStatus:
@@ -198,17 +201,23 @@ class Tractive:
         and health overview are requested sequentially, with ``fetch_delay``
         seconds between trackables; the cached tracker details are refreshed.
         Fields not provided by REST (switch states) keep their last value.
+        Tracker details fetched by a preceding ``async_fetch_trackables`` are
+        reused once.
         """
         if self._trackables is None:
             await self.async_fetch_trackables()
             if self._fetch_delay:
                 await asyncio.sleep(self._fetch_delay)
+        reuse_details, self._details_fresh = self._details_fresh, False
         for index, trackable in enumerate(self._trackables or []):
             if index and self._fetch_delay:
                 await asyncio.sleep(self._fetch_delay)
             tracker = self.tracker(trackable.tracker_id)
-            tracker_details = await tracker.details()
-            trackable.tracker_details = tracker_details
+            if reuse_details:
+                tracker_details = trackable.tracker_details
+            else:
+                tracker_details = await tracker.details()
+                trackable.tracker_details = tracker_details
             hw_info = await tracker.hw_info()
             pos_report = await tracker.pos_report()
             health = await self.trackable_object(trackable.pet_id).health_overview()
