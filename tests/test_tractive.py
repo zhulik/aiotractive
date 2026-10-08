@@ -158,7 +158,7 @@ def test_update_status_clears_charging_and_power_saving(client: Tractive) -> Non
     )
 
 
-def test_update_status_leaves_power_saving_without_reason(client: Tractive) -> None:
+def test_update_status_clears_power_saving_when_reason_omitted(client: Tractive) -> None:
     """Test fresh hardware events leaving power saving without an explicit reason."""
     client._update_status(
         {
