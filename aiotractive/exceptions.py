@@ -9,6 +9,10 @@ class UnauthorizedError(TractiveError):
     """When the server does not accept the API token."""
 
 
+class ForbiddenError(TractiveError):
+    """When the server responds with 403: no access to the requested resource."""
+
+
 class BadRequestError(TractiveError):
     """When the server responds with 400."""
 

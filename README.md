@@ -180,6 +180,8 @@ The library raises the following exceptions:
 
 - `TractiveError` - Base exception class
 - `UnauthorizedError` - When authentication fails or token is invalid
+- `ForbiddenError` - When access to a resource is denied (403), e.g. the health overview of a pet whose tracker subscription is inactive. Authentication and the event channel report 403 as `UnauthorizedError`
+- `BadRequestError` - When the server rejects the request (400)
 - `NotFoundError` - When the requested resource is not found (404)
 - `DisconnectedError` - When the event channel disconnects
 

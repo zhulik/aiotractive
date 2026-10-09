@@ -11,7 +11,13 @@ from aiointercept import aiointercept
 
 from aiotractive import Tractive
 from aiotractive.api import API
-from aiotractive.exceptions import TractiveError
+from aiotractive.exceptions import (
+    BadRequestError,
+    ForbiddenError,
+    NotFoundError,
+    TractiveError,
+    UnauthorizedError,
+)
 
 API_URL = str(API.API_URL)
 
@@ -58,3 +64,33 @@ async def test_request_retries_429_and_preserves_client_error_cause(
     cause = exc_info.value.__cause__
     assert isinstance(cause, ClientResponseError)
     assert cause.status == HTTPStatus.TOO_MANY_REQUESTS
+
+
+@pytest.mark.parametrize(
+    ("status", "expected"),
+    [
+        (HTTPStatus.UNAUTHORIZED, UnauthorizedError),
+        (HTTPStatus.FORBIDDEN, ForbiddenError),
+        (HTTPStatus.NOT_FOUND, NotFoundError),
+        (HTTPStatus.BAD_REQUEST, BadRequestError),
+        (HTTPStatus.INTERNAL_SERVER_ERROR, TractiveError),
+    ],
+)
+async def test_request_maps_http_status_to_exception(
+    auth_response: dict[str, Any], status: HTTPStatus, expected: type[TractiveError]
+) -> None:
+    """Test that request() maps HTTP error statuses to the library exceptions."""
+    async with aiointercept(mock_external_urls=True) as mock:
+        mock_auth(mock, auth_response)
+        uri = f"user/{auth_response['user_id']}/trackers"
+        mock.get(f"{API_URL}{uri}", status=status)
+
+        api = API("test@example.com", "password")
+        with pytest.raises(expected) as exc_info:
+            await api.request(uri)
+        await api.close()
+
+    assert type(exc_info.value) is expected
+    cause = exc_info.value.__cause__
+    assert isinstance(cause, ClientResponseError)
+    assert cause.status == status

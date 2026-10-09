@@ -14,7 +14,13 @@ import aiohttp
 from aiohttp.client_exceptions import ClientResponseError
 from yarl import URL
 
-from .exceptions import BadRequestError, NotFoundError, TractiveError, UnauthorizedError
+from .exceptions import (
+    BadRequestError,
+    ForbiddenError,
+    NotFoundError,
+    TractiveError,
+    UnauthorizedError,
+)
 
 CLIENT_ID = "625e533dc3c3b41c28a669f0"
 
@@ -85,8 +91,10 @@ class API:
         try:
             return await self.raw_request(*args, **kwargs)
         except ClientResponseError as error:
-            if error.status in (HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN):
+            if error.status == HTTPStatus.UNAUTHORIZED:
                 raise UnauthorizedError from error
+            if error.status == HTTPStatus.FORBIDDEN:
+                raise ForbiddenError from error
             if error.status == HTTPStatus.NOT_FOUND:
                 raise NotFoundError from error
             if error.status == HTTPStatus.BAD_REQUEST:
