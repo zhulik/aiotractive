@@ -127,6 +127,29 @@ def test_update_tracker_hardware_without_hardware(event: dict[str, Any]) -> None
     assert status == _previous()
 
 
+@pytest.mark.parametrize(
+    ("fields", "expected"),
+    [
+        ({"tracker_state": "OPERATIONAL"}, False),
+        ({"tracker_state": "NOT_REPORTING"}, False),
+        ({"tracker_state_reason": "POWER_SAVING"}, True),
+        ({"tracker_state_reason": "OTHER"}, False),
+        ({"tracker_state_reason": None}, False),
+        ({}, True),
+        ({"tracker_state": None}, True),
+    ],
+)
+def test_update_tracker_hardware_power_saving(
+    fields: dict[str, Any], expected: bool
+) -> None:
+    """Test state snapshots clear absent reasons, but partial events preserve them."""
+    status = TrackerStatus(tracker_state="operational", power_saving=True)
+
+    update_tracker_hardware(status, {"hardware": {"battery_level": 42}, **fields})
+
+    assert status.power_saving is expected
+
+
 def test_update_tracker_position_full_event() -> None:
     """Test that a full position event sets every position field."""
     status = _previous()

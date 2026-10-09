@@ -70,8 +70,8 @@ class Trackable:
 def update_tracker_hardware(status: TrackerStatus, event: dict[str, Any]) -> None:
     """Apply the hardware block of a tracker event to the status.
 
-    Only fields carried by the event are overwritten; missing keys keep the
-    last known value.
+    Missing fields keep their last known value, except that an explicit tracker
+    state without a reason clears power saving.
     """
     hw = event.get("hardware")
     if not hw:
@@ -82,8 +82,8 @@ def update_tracker_hardware(status: TrackerStatus, event: dict[str, Any]) -> Non
         status.tracker_state = tracker_state.lower()
     if "charging_state" in event:
         status.battery_charging = event["charging_state"] == "CHARGING"
-    if "tracker_state_reason" in event:
-        status.power_saving = event["tracker_state_reason"] == "POWER_SAVING"
+    if tracker_state is not None or "tracker_state_reason" in event:
+        status.power_saving = event.get("tracker_state_reason") == "POWER_SAVING"
 
 
 def update_tracker_position(status: TrackerStatus, event: dict[str, Any]) -> None:

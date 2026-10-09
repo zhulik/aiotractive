@@ -158,6 +158,46 @@ def test_update_status_clears_charging_and_power_saving(client: Tractive) -> Non
     )
 
 
+def test_update_status_clears_power_saving_when_reason_omitted(
+    client: Tractive,
+) -> None:
+    """Test fresh hardware events leaving power saving without an explicit reason."""
+    client._update_status(
+        {
+            "message": "tracker_status",
+            "tracker_id": TRACKER_ID,
+            "tracker_state": "OPERATIONAL",
+            "tracker_state_reason": "POWER_SAVING",
+            "hardware": {
+                "time": 1758615993,
+                "battery_level": 98,
+                "power_saving_zone_id": "zone",
+            },
+        }
+    )
+    status = client.status.trackers[TRACKER_ID]
+    assert status.power_saving is True
+    assert status.power_saving_zone is True
+
+    client._update_status(
+        {
+            "message": "tracker_status",
+            "tracker_id": TRACKER_ID,
+            "tracker_state": "OPERATIONAL",
+            "hardware": {
+                "time": 1758645110,
+                "battery_level": 97,
+                "power_saving_zone_id": None,
+            },
+        }
+    )
+
+    assert status.tracker_state == "operational"
+    assert status.battery_level == 97
+    assert status.power_saving is False
+    assert status.power_saving_zone is False
+
+
 def test_update_status_new_tracker(client: Tractive) -> None:
     """Test that an event for an unknown tracker creates its status."""
     client._update_status({**FULL_EVENT, "tracker_id": OTHER_TRACKER_ID})
