@@ -147,8 +147,8 @@ async with Tractive("email", "password", fetch_delay=2.0) as client:
 ```
 
 - `async_fetch_trackables()` returns a list of `Trackable` (`pet_id`, `tracker_id`, `pet_details`,
-  `tracker_details`, `name`) and caches it. Pets without a tracker and shared trackers (no
-  details) are skipped; a tracker without an `_id` raises `TractiveError`.
+  `tracker_details`, `name`, `weight` in grams) and caches it. Pets without a tracker and shared
+  trackers (no details) are skipped; a tracker without an `_id` raises `TractiveError`.
 - `async_fetch_status()` refreshes every trackable via REST (fetching trackables first if
   needed) and returns `client.status`. Values are merged, so switch states received from events
   are kept.

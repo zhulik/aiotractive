@@ -398,6 +398,31 @@ def test_trackable_name() -> None:
     assert trackable.name == "Test Pet"
 
 
+@pytest.mark.parametrize(
+    ("weight", "expected"),
+    [
+        (23700, 23700),
+        (None, None),
+        ("missing", None),
+    ],
+)
+def test_trackable_weight(weight: object, expected: int | None) -> None:
+    """Test that the trackable weight comes from the pet details."""
+    pet_details = load_fixture("trackable_object")
+    if weight == "missing":
+        del pet_details["details"]["weight"]
+    else:
+        pet_details["details"]["weight"] = weight
+    trackable = Trackable(
+        pet_id="pet_id_123",
+        tracker_id="device_id_123",
+        pet_details=pet_details,
+        tracker_details=load_fixture("tracker_details"),
+    )
+
+    assert trackable.weight == expected
+
+
 def test_tractive_status_defaults_are_independent() -> None:
     """Test that default containers are not shared between instances."""
     first = TractiveStatus()
