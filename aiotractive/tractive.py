@@ -23,6 +23,7 @@ from .models import (
     update_tracker_from_rest,
     update_tracker_hardware,
     update_tracker_position,
+    update_tracker_state,
     update_tracker_switches,
 )
 from .trackable_object import TrackableObject
@@ -182,6 +183,8 @@ class Tractive:
         )
         status = self.status.trackers.setdefault(tracker_id, TrackerStatus())
 
+        # State changes can arrive without a new hardware sample.
+        update_tracker_state(status, event)
         hw_time = (event.get("hardware") or {}).get("time")
         if _is_new(self._last_hw_time, tracker_id, hw_time):
             update_tracker_hardware(status, event)
