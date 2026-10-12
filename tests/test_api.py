@@ -21,6 +21,13 @@ from aiotractive.exceptions import (
 
 API_URL = str(API.API_URL)
 
+INVALID_CREDENTIALS_RESPONSE = {
+    "code": 8001,
+    "category": "SECURITY",
+    "message": "The provided credentials are invalid.",
+    "detail": None,
+}
+
 
 def mock_auth(mock: aiointercept, auth_response: dict[str, Any]) -> None:
     """Add authentication endpoint mock to aiointercept."""
@@ -94,3 +101,55 @@ async def test_request_maps_http_status_to_exception(
     cause = exc_info.value.__cause__
     assert isinstance(cause, ClientResponseError)
     assert cause.status == status
+
+
+@pytest.mark.parametrize(
+    ("status", "expected"),
+    [
+        (HTTPStatus.FORBIDDEN, UnauthorizedError),
+        (HTTPStatus.UNAUTHORIZED, UnauthorizedError),
+        (HTTPStatus.INTERNAL_SERVER_ERROR, TractiveError),
+    ],
+)
+async def test_authenticate_maps_http_status_to_exception(
+    status: HTTPStatus, expected: type[TractiveError]
+) -> None:
+    """Test that authenticate() maps HTTP error statuses and caches nothing."""
+    async with aiointercept(mock_external_urls=True) as mock:
+        mock.post(
+            f"{API_URL}auth/token",
+            status=status,
+            payload=INVALID_CREDENTIALS_RESPONSE,
+        )
+
+        api = API("test@example.com", "password")
+        with pytest.raises(expected) as exc_info:
+            await api.authenticate()
+        await api.close()
+
+    assert type(exc_info.value) is expected
+    cause = exc_info.value.__cause__
+    assert isinstance(cause, ClientResponseError)
+    assert cause.status == status
+    assert api._user_credentials is None
+    assert api._auth_headers is None
+
+
+async def test_request_preserves_unauthorized_error_from_auth() -> None:
+    """Test that request() re-raises UnauthorizedError from the auth path unchanged."""
+    async with aiointercept(mock_external_urls=True) as mock:
+        mock.post(
+            f"{API_URL}auth/token",
+            status=HTTPStatus.FORBIDDEN,
+            payload=INVALID_CREDENTIALS_RESPONSE,
+        )
+
+        api = API("test@example.com", "password")
+        with pytest.raises(UnauthorizedError) as exc_info:
+            await api.request("user/x/trackers")
+        await api.close()
+
+    assert type(exc_info.value) is UnauthorizedError
+    cause = exc_info.value.__cause__
+    assert isinstance(cause, ClientResponseError)
+    assert cause.status == HTTPStatus.FORBIDDEN
