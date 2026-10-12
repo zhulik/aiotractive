@@ -100,6 +100,8 @@ class API:
             if error.status == HTTPStatus.BAD_REQUEST:
                 raise BadRequestError from error
             raise TractiveError from error
+        except TractiveError:
+            raise
         except Exception as error:
             raise TractiveError from error
 
@@ -175,6 +177,7 @@ class API:
                 headers=self.base_headers(),
                 timeout=aiohttp.ClientTimeout(total=self._timeout),
             ) as response:
+                response.raise_for_status()
                 if (
                     "Content-Type" in response.headers
                     and "application/json" in response.headers["Content-Type"]
