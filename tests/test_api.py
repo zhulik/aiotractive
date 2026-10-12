@@ -94,3 +94,33 @@ async def test_request_maps_http_status_to_exception(
     cause = exc_info.value.__cause__
     assert isinstance(cause, ClientResponseError)
     assert cause.status == status
+
+
+@pytest.mark.parametrize(
+    ("status", "expected"),
+    [
+        (HTTPStatus.FORBIDDEN, UnauthorizedError),
+        (HTTPStatus.UNAUTHORIZED, UnauthorizedError),
+        (HTTPStatus.INTERNAL_SERVER_ERROR, TractiveError),
+    ],
+)
+async def test_authenticate_maps_http_status_to_exception(
+    status: HTTPStatus, expected: type[TractiveError]
+) -> None:
+    """Test authenticate() and request() map HTTP error statuses, caching nothing."""
+    async with aiointercept(mock_external_urls=True) as mock:
+        mock.post(f"{API_URL}auth/token", status=status, repeat=True)
+
+        api = API("test@example.com", "password")
+        with pytest.raises(expected) as exc_info:
+            await api.authenticate()
+        with pytest.raises(expected):
+            await api.request("user/x/trackers")
+        await api.close()
+
+    assert type(exc_info.value) is expected
+    cause = exc_info.value.__cause__
+    assert isinstance(cause, ClientResponseError)
+    assert cause.status == status
+    assert api._user_credentials is None
+    assert api._auth_headers is None
