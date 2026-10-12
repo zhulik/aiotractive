@@ -66,6 +66,12 @@ class Trackable:
         name: str = self.pet_details["details"]["name"]
         return name
 
+    @property
+    def weight(self) -> int | None:
+        """Return the raw API weight of the pet in grams, or None if missing."""
+        weight: int | None = self.pet_details["details"].get("weight")
+        return weight
+
 
 def update_tracker_hardware(status: TrackerStatus, event: dict[str, Any]) -> None:
     """Apply the hardware block of a tracker event to the status.
