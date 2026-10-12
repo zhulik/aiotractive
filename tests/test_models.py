@@ -399,20 +399,18 @@ def test_trackable_name() -> None:
 
 
 @pytest.mark.parametrize(
-    ("weight", "expected"),
+    ("override", "expected"),
     [
-        (23700, 23700),
-        (None, None),
-        ("missing", None),
+        ({"weight": 23700}, 23700),
+        ({"weight": None}, None),
+        ({}, None),
     ],
 )
-def test_trackable_weight(weight: object, expected: int | None) -> None:
+def test_trackable_weight(override: dict[str, Any], expected: int | None) -> None:
     """Test that the trackable weight comes from the pet details."""
     pet_details = load_fixture("trackable_object")
-    if weight == "missing":
-        del pet_details["details"]["weight"]
-    else:
-        pet_details["details"]["weight"] = weight
+    del pet_details["details"]["weight"]
+    pet_details["details"].update(override)
     trackable = Trackable(
         pet_id="pet_id_123",
         tracker_id="device_id_123",
