@@ -5,8 +5,8 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import time
 from collections.abc import AsyncIterator, Callable
-from functools import partial
 from types import TracebackType
 from typing import Any
 
@@ -30,6 +30,7 @@ from .tracker import Tracker
 _LOGGER = logging.getLogger(__name__)
 
 RECONNECT_INTERVAL = 10
+PET_DETAILS_REFRESH_INTERVAL = 30 * 60  # seconds
 
 
 def _is_new(cache: dict[str, float], tracker_id: str, timestamp: float | None) -> bool:
@@ -49,16 +50,13 @@ class Tractive:
         fetch_delay: float = 2.0,
         **kwargs: Any,  # noqa: ANN401
     ) -> None:
-        """Initialize the client.
-
-        ``fetch_delay`` is the pause in seconds between the REST requests of
-        consecutive trackables, to avoid HTTP 429 responses.
-        """
+        """Initialize the client."""
         self._api = API(*args, **kwargs)
         self._fetch_delay = fetch_delay
         self.status: TractiveStatus = TractiveStatus()
         self._trackables: list[Trackable] | None = None
         self._details_fresh = False
+        self._pet_details_fetched: float | None = None
         self._last_hw_time: dict[str, float] = {}
         self._last_pos_time: dict[str, float] = {}
         self._update_listener: Callable[[Exception | None], None] | None = None
@@ -67,11 +65,7 @@ class Tractive:
     def subscribe_updates(
         self, update_listener: Callable[[Exception | None], None]
     ) -> None:
-        """Register a callback for push updates.
-
-        The argument is None when the status changed or the channel
-        (re)connected, or an Exception when the channel failed.
-        """
+        """Register a callback for push updates."""
         self._update_listener = update_listener
 
     def _notify(self, exc: Exception | None) -> None:
@@ -99,19 +93,18 @@ class Tractive:
         self._background_task = None
 
     async def listen(self) -> None:
-        """Consume real-time events and keep ``status`` up to date.
-
-        Runs until cancelled. Transient channel errors are reported to the
-        listener and the channel reconnects after ``RECONNECT_INTERVAL``
-        seconds; ``UnauthorizedError`` is reported and ends the loop.
-        """
+        """Consume real-time events and keep ``status`` up to date."""
         while True:
             self._last_hw_time.clear()
             self._last_pos_time.clear()
             try:
-                channel = Channel(self._api, on_connected=partial(self._notify, None))
+                channel = Channel(self._api)
                 async with contextlib.aclosing(channel.listen()) as events:
                     async for event in events:
+                        if event.get("message") == "handshake":
+                            await self._handle_handshake()
+                            self._notify(None)
+                            continue
                         try:
                             self._update_status(event)
                         except (KeyError, TypeError, AttributeError, ValueError) as err:
@@ -128,6 +121,22 @@ class Tractive:
                 self._notify(exc)
                 await asyncio.sleep(RECONNECT_INTERVAL)
 
+    async def _handle_handshake(self) -> None:
+        """Refresh the pet details after a channel (re)connect, rate-limited."""
+        if (
+            self._pet_details_fetched is not None
+            and time.monotonic() - self._pet_details_fetched
+            < PET_DETAILS_REFRESH_INTERVAL
+        ):
+            return
+        self._pet_details_fetched = time.monotonic()
+        try:
+            await self.async_refresh_pet_details()
+        except UnauthorizedError:
+            raise
+        except (TractiveError, KeyError, TypeError, AttributeError, ValueError) as err:
+            _LOGGER.warning("Failed to refresh pet details: %s", err)
+
     def _update_status(self, event: dict[str, Any]) -> None:
         """Update the status from an event."""
         if event.get("message") == "health_overview":
@@ -142,6 +151,7 @@ class Tractive:
 
         tracker_id = event.get("tracker_id")
         if tracker_id is None:
+            _LOGGER.debug("Ignoring event %s", event.get("message"))
             return
         status = self.status.trackers.setdefault(tracker_id, TrackerStatus())
 
@@ -154,12 +164,7 @@ class Tractive:
         update_tracker_switches(status, event)
 
     async def async_fetch_trackables(self) -> list[Trackable]:
-        """Fetch the pets that have a tracker assigned, with their details.
-
-        Requests are sequential with ``fetch_delay`` seconds between
-        trackables. The result is cached for ``async_fetch_status``; the first
-        ``async_fetch_status`` after this call reuses the fetched tracker details.
-        """
+        """Fetch the pets that have a tracker assigned, with their details."""
         trackables: list[Trackable] = []
         for index, obj in enumerate(await self.trackable_objects()):
             if index and self._fetch_delay:
@@ -182,28 +187,23 @@ class Tractive:
             if not tracker_details.get("_id"):
                 msg = f"Tractive API returns incomplete data for tracker {device_id}"
                 raise TractiveError(msg)
-            trackables.append(
-                Trackable(
-                    pet_id=data["_id"],
-                    tracker_id=device_id,
-                    pet_details=data,
-                    tracker_details=tracker_details,
-                )
+            trackable = Trackable(
+                pet_id=data["_id"],
+                tracker_id=device_id,
+                pet_details=data,
+                tracker_details=tracker_details,
             )
+            trackables.append(trackable)
+            self.status.pets.setdefault(
+                trackable.pet_id, PetStatus()
+            ).weight = trackable.weight
         self._trackables = trackables
         self._details_fresh = True
+        self._pet_details_fetched = time.monotonic()
         return trackables
 
     async def async_fetch_status(self) -> TractiveStatus:
-        """Refresh ``status`` of every trackable via REST.
-
-        Per trackable, fresh tracker details, hardware info, position report
-        and health overview are requested sequentially, with ``fetch_delay``
-        seconds between trackables; the cached tracker details are refreshed.
-        Fields not provided by REST (switch states) keep their last value.
-        Tracker details fetched by a preceding ``async_fetch_trackables`` are
-        reused once.
-        """
+        """Refresh ``status`` of every trackable via REST."""
         if self._trackables is None:
             await self.async_fetch_trackables()
             if self._fetch_delay:
@@ -227,10 +227,26 @@ class Tractive:
                 hw_info,
                 pos_report,
             )
+            pet_status = self.status.pets.setdefault(trackable.pet_id, PetStatus())
+            pet_status.weight = trackable.weight
             if health:
-                update_pet_from_health_overview(
-                    self.status.pets.setdefault(trackable.pet_id, PetStatus()), health
-                )
+                update_pet_from_health_overview(pet_status, health)
+        return self.status
+
+    async def async_refresh_pet_details(self) -> TractiveStatus:
+        """Refresh the cached pet details and the pet weight via REST."""
+        if self._trackables is None:
+            await self.async_fetch_trackables()
+            return self.status
+        for index, trackable in enumerate(self._trackables):
+            if index and self._fetch_delay:
+                await asyncio.sleep(self._fetch_delay)
+            data = await self.trackable_object(trackable.pet_id).details()
+            trackable.pet_details = data
+            self.status.pets.setdefault(
+                trackable.pet_id, PetStatus()
+            ).weight = trackable.weight
+        self._pet_details_fetched = time.monotonic()
         return self.status
 
     async def authenticate(self) -> dict[str, Any] | None:
@@ -274,6 +290,8 @@ class Tractive:
         """Listen for real-time events from the Tractive API."""
         async with contextlib.aclosing(Channel(self._api).listen()) as events:
             async for event in events:
+                if event.get("message") == "handshake":
+                    continue
                 yield event
 
     async def close(self) -> None:
