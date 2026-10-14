@@ -3,16 +3,20 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import dataclasses
 import logging
+import time
 from collections.abc import AsyncGenerator
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
 
 from aiotractive import PetStatus, TrackerStatus, Tractive
 from aiotractive.exceptions import ForbiddenError, TractiveError, UnauthorizedError
+from aiotractive.models import Trackable
+from aiotractive.tractive import PET_DETAILS_REFRESH_INTERVAL
 
 from .conftest import load_fixture
 
@@ -58,6 +62,8 @@ HEALTH_OVERVIEW: dict[str, Any] = {
     "sleep": {"minutesDaySleep": 100, "minutesNightSleep": 300, "minutesCalm": 122},
     "activity": {"minutesGoal": 200, "minutesActive": 150},
 }
+
+HANDSHAKE: dict[str, Any] = {"message": "handshake"}
 
 FULL_PET_STATUS = PetStatus(
     daily_goal=200,
@@ -279,6 +285,30 @@ def test_update_status_health_overview_without_pet_id(
 
 
 @pytest.mark.parametrize(
+    "event",
+    [
+        {"message": "activity_data_updated", "pet_id": "x"},
+        {"message": "command_confirmed", "device_id": "y"},
+    ],
+)
+def test_update_status_ignores_unknown_event(
+    client: Tractive, event: dict[str, Any], caplog: pytest.LogCaptureFixture
+) -> None:
+    """Test that an event without a known message or tracker_id is logged only."""
+    before = copy.deepcopy(client.status)
+
+    with caplog.at_level(logging.DEBUG, logger="aiotractive.tractive"):
+        client._update_status(event)
+
+    assert client.status == before
+    assert any(
+        r.levelno == logging.DEBUG
+        and r.getMessage() == f"Ignoring event {event['message']}"
+        for r in caplog.records
+    )
+
+
+@pytest.mark.parametrize(
     "malformed",
     [
         {"tracker_id": TRACKER_ID, "hardware": "oops"},
@@ -381,18 +411,129 @@ async def test_listen_reconnects_after_unexpected_error(client: Tractive) -> Non
     assert [c.args for c in listener.call_args_list] == [(unexpected,), (terminal,)]
 
 
-async def test_listen_on_connected_notifies(client: Tractive) -> None:
-    """Test that the channel connect callback notifies the listener."""
-    listener = MagicMock()
+async def test_listen_handshake_refreshes_pet_details_first_time(
+    client: Tractive,
+) -> None:
+    """Test that the first handshake refreshes pet details, then notifies."""
+    order: list[Any] = []
+    listener = MagicMock(side_effect=order.append)
     client.subscribe_updates(listener)
-    channel_cls = mock_channel(events_then_raise([], UnauthorizedError("bye")))
+    refresh = AsyncMock(side_effect=lambda: order.append("refresh"))
+    client.async_refresh_pet_details = refresh
+    error = UnauthorizedError("bye")
+    channel_cls = mock_channel(events_then_raise([HANDSHAKE], error))
+    assert client._pet_details_fetched is None
 
     with patch("aiotractive.tractive.Channel", channel_cls):
         await client.listen()
-    listener.reset_mock()
-    channel_cls.call_args.kwargs["on_connected"]()
 
-    listener.assert_called_once_with(None)
+    assert order == ["refresh", None, error]
+    refresh.assert_awaited_once_with()
+
+
+@pytest.mark.parametrize(
+    ("age", "refreshes"),
+    [
+        (PET_DETAILS_REFRESH_INTERVAL + 1, 1),
+        (PET_DETAILS_REFRESH_INTERVAL, 1),
+        (PET_DETAILS_REFRESH_INTERVAL - 60, 0),
+        (0, 0),
+    ],
+)
+async def test_listen_handshake_refresh_rate_limited(
+    client: Tractive, age: float, refreshes: int
+) -> None:
+    """Test that a handshake refreshes pet details at most once per interval."""
+    listener = MagicMock()
+    client.subscribe_updates(listener)
+    client.async_refresh_pet_details = AsyncMock()
+    client._update_status = MagicMock()
+    client._pet_details_fetched = time.monotonic() - age
+    error = UnauthorizedError("bye")
+    channel_cls = mock_channel(events_then_raise([HANDSHAKE], error))
+
+    with patch("aiotractive.tractive.Channel", channel_cls):
+        await client.listen()
+
+    assert client.async_refresh_pet_details.await_count == refreshes
+    assert [c.args for c in listener.call_args_list] == [(None,), (error,)]
+    client._update_status.assert_not_called()
+    assert channel_cls.call_args == call(client._api)
+
+
+@pytest.mark.parametrize(
+    ("response", "details_kept"),
+    [(TractiveError("boom"), True), ({"_id": PET_ID}, False)],
+)
+async def test_listen_handshake_refresh_error_is_logged(
+    client: Tractive,
+    response: dict[str, Any] | Exception,
+    details_kept: bool,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Test that a failed or malformed pet details refresh is logged."""
+    listener = MagicMock()
+    client.subscribe_updates(listener)
+    trackable = make_trackable(PET_ID)
+    old_details = copy.deepcopy(trackable.pet_details)
+    client._trackables = [trackable]
+    client._api.request = mock_request({"trackable_object/pet_id_123": response})
+    error = UnauthorizedError("bye")
+    channel_cls = mock_channel(events_then_raise([HANDSHAKE, FULL_EVENT], error))
+
+    with (
+        patch("aiotractive.tractive.Channel", channel_cls),
+        patch("aiotractive.tractive.asyncio.sleep", new_callable=AsyncMock) as sleep,
+    ):
+        await client.listen()
+
+    assert [c.args for c in listener.call_args_list] == [(None,), (None,), (error,)]
+    assert client.status.trackers[TRACKER_ID].battery_level == 80
+    assert channel_cls.call_count == 1
+    sleep.assert_not_called()
+    assert trackable.pet_details == (old_details if details_kept else response)
+    assert client._pet_details_fetched is not None
+    assert any(
+        r.levelno == logging.WARNING
+        and r.name == "aiotractive.tractive"
+        and "Failed to refresh pet details" in r.getMessage()
+        for r in caplog.records
+    )
+
+
+async def test_listen_handshake_refresh_unauthorized_ends_loop(
+    client: Tractive,
+) -> None:
+    """Test that an UnauthorizedError from the refresh is reported and ends listen."""
+    listener = MagicMock()
+    client.subscribe_updates(listener)
+    error = UnauthorizedError("expired")
+    client.async_refresh_pet_details = AsyncMock(side_effect=error)
+    channel_cls = mock_channel(
+        events_then_raise([HANDSHAKE, FULL_EVENT], TractiveError("unreached"))
+    )
+
+    with patch("aiotractive.tractive.Channel", channel_cls):
+        await client.listen()
+
+    assert [c.args for c in listener.call_args_list] == [(error,)]
+    assert client.status.trackers[TRACKER_ID] == BASE_STATUS
+    assert channel_cls.call_count == 1
+
+
+async def test_events_skips_handshake(client: Tractive) -> None:
+    """Test that events() yields channel events but not handshakes."""
+    channel_cls = mock_channel(
+        events_then_raise([HANDSHAKE, FULL_EVENT], UnauthorizedError("bye"))
+    )
+
+    with patch("aiotractive.tractive.Channel", channel_cls):
+        events = client.events()
+        first = await anext(events)
+        with pytest.raises(UnauthorizedError):
+            await anext(events)
+
+    assert first == FULL_EVENT
 
 
 async def test_listen_cancel(client: Tractive) -> None:
@@ -513,6 +654,8 @@ async def test_fetch_trackables(client: Tractive) -> None:
     assert trackables[0].tracker_details == load_fixture("tracker_details")
     assert sleep.await_count == 3
     assert client._trackables is trackables
+    assert client.status.pets[PET_ID].weight == 23700
+    assert client._pet_details_fetched is not None
 
 
 async def test_fetch_trackables_incomplete_tracker(client: Tractive) -> None:
@@ -527,23 +670,19 @@ async def test_fetch_trackables_incomplete_tracker(client: Tractive) -> None:
 
 
 @pytest.mark.parametrize(
-    ("health", "expected_pets"),
+    ("health", "expected_pet"),
     [
-        (load_fixture("health_overview"), {PET_ID: FULL_PET_STATUS}),
-        ({}, {}),
-        (ForbiddenError(), {}),
+        (load_fixture("health_overview"), FULL_PET_STATUS),
+        ({}, PetStatus()),
+        (ForbiddenError(), PetStatus()),
     ],
 )
 async def test_fetch_status(
     client: Tractive,
     health: dict[str, Any] | Exception,
-    expected_pets: dict[str, PetStatus],
+    expected_pet: PetStatus,
 ) -> None:
-    """Test that the REST refresh fills the status and keeps switch states.
-
-    A pet whose health overview is not accessible (inactive tracker
-    subscription) gets no pet status but its tracker is still refreshed.
-    """
+    """Test that the REST refresh fills the status and keeps switch states."""
     client._api.user_id = AsyncMock(return_value="user_1")
     client._api.request = mock_request(
         {
@@ -576,7 +715,7 @@ async def test_fetch_status(
         led=None,
         live_tracking=None,
     )
-    assert status.pets == expected_pets
+    assert status.pets == {PET_ID: dataclasses.replace(expected_pet, weight=23700)}
 
 
 def fetch_status_responses() -> dict[str, Any]:
@@ -676,6 +815,26 @@ async def test_fetch_status_error_clears_details_reuse(client: Tractive) -> None
     assert urls.count("tracker/device_id_123") == 2
 
 
+@pytest.mark.parametrize(
+    ("health", "expected_pet"),
+    [({}, PetStatus()), (load_fixture("health_overview"), FULL_PET_STATUS)],
+)
+async def test_fetch_status_weight_from_cached_details(
+    client: Tractive, health: dict[str, Any], expected_pet: PetStatus
+) -> None:
+    """Test that the REST refresh takes the pet weight from cached pet details."""
+    client._trackables = [make_trackable(PET_ID)]
+    client._api.request = mock_request(
+        {**fetch_status_responses(), "pet/pet_id_123/health/overview": health}
+    )
+
+    status = await client.async_fetch_status()
+
+    assert status.pets == {PET_ID: dataclasses.replace(expected_pet, weight=1)}
+    urls = [c.args[0] for c in client._api.request.await_args_list]
+    assert "trackable_object/pet_id_123" not in urls
+
+
 async def test_fetch_status_delay_after_implicit_fetch(client: Tractive) -> None:
     """Test the delay after an implicit trackables fetch and between trackables."""
     client._api.user_id = AsyncMock(return_value="user_1")
@@ -689,3 +848,78 @@ async def test_fetch_status_delay_after_implicit_fetch(client: Tractive) -> None
         await client.async_fetch_status()
 
     assert sleep.await_count == 2
+
+
+def make_trackable(pet_id: str) -> Trackable:
+    """Return a cached trackable with outdated pet details."""
+    return Trackable(
+        pet_id=pet_id,
+        tracker_id="device_id_123",
+        pet_details={"_id": pet_id, "details": {"name": "Old", "weight": 1}},
+        tracker_details={"_id": "device_id_123"},
+    )
+
+
+async def test_refresh_pet_details(client: Tractive) -> None:
+    """Test that the refresh updates cached pet details, weight and timestamp."""
+    trackable = make_trackable(PET_ID)
+    client._trackables = [trackable]
+    client._api.request = mock_request(
+        {"trackable_object/pet_id_123": load_fixture("trackable_object")}
+    )
+    started = time.monotonic()
+
+    status = await client.async_refresh_pet_details()
+
+    assert status is client.status
+    assert trackable.pet_details == load_fixture("trackable_object")
+    assert status.pets[PET_ID].weight == 23700
+    assert client._pet_details_fetched is not None
+    assert client._pet_details_fetched >= started
+
+
+async def test_refresh_pet_details_delay(client: Tractive) -> None:
+    """Test that pet details are requested sequentially with the fetch delay."""
+    client._trackables = [make_trackable(PET_ID), make_trackable("pet_2")]
+    client._api.request = mock_request(
+        {
+            "trackable_object/pet_id_123": load_fixture("trackable_object"),
+            "trackable_object/pet_2": {"_id": "pet_2", "details": {"weight": 5000}},
+        }
+    )
+    client._fetch_delay = 2.0
+
+    with patch("aiotractive.tractive.asyncio.sleep", new_callable=AsyncMock) as sleep:
+        status = await client.async_refresh_pet_details()
+
+    sleep.assert_awaited_once_with(2.0)
+    assert [c.args[0] for c in client._api.request.await_args_list] == [
+        "trackable_object/pet_id_123",
+        "trackable_object/pet_2",
+    ]
+    assert status.pets[PET_ID].weight == 23700
+    assert status.pets["pet_2"].weight == 5000
+
+
+async def test_refresh_pet_details_fetches_trackables_first(client: Tractive) -> None:
+    """Test that without cached trackables the refresh fetches the trackables."""
+    client.async_fetch_trackables = AsyncMock()
+    client._api.request = AsyncMock()
+
+    status = await client.async_refresh_pet_details()
+
+    assert status is client.status
+    client.async_fetch_trackables.assert_awaited_once_with()
+    client._api.request.assert_not_called()
+
+
+@pytest.mark.parametrize("error", [TractiveError("boom"), UnauthorizedError("bye")])
+async def test_refresh_pet_details_error(client: Tractive, error: Exception) -> None:
+    """Test that request errors propagate and leave the timestamp unset."""
+    client._trackables = [make_trackable(PET_ID)]
+    client._api.request = mock_request({"trackable_object/pet_id_123": error})
+
+    with pytest.raises(type(error)):
+        await client.async_refresh_pet_details()
+
+    assert client._pet_details_fetched is None
