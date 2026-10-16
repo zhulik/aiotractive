@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from http import HTTPStatus
 from typing import Any
 
@@ -27,18 +28,52 @@ def mock_auth(mock: aiointercept, auth_response: dict[str, Any]) -> None:
     mock.post(f"{API_URL}auth/token", payload=auth_response)
 
 
-async def test_auth_success(auth_response: dict[str, Any]) -> None:
+async def test_auth_success(
+    auth_response: dict[str, Any], caplog: pytest.LogCaptureFixture
+) -> None:
     """Test successful authentication returns user_id and access_token."""
     async with aiointercept(mock_external_urls=True) as mock:
         mock_auth(mock, auth_response)
 
         async with Tractive("test@example.com", "password") as client:
-            creds = await client.authenticate()
+            with caplog.at_level(logging.DEBUG, logger="aiotractive.api"):
+                creds = await client.authenticate()
 
     assert creds is not None
 
     assert creds["user_id"] == "test_user_123"
     assert creds["access_token"] == "test_access_token_xyz"  # noqa: S105
+    assert "test_access_token_xyz" not in caplog.text
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "logged"),
+    [
+        ({"payload": {"pet": "rex"}}, ["Response {url}: {{'pet': 'rex'}}"]),
+        ({"body": b"secret-bytes", "content_type": "application/octet-stream"}, []),
+    ],
+)
+async def test_request_logs_response_body(
+    auth_response: dict[str, Any],
+    caplog: pytest.LogCaptureFixture,
+    kwargs: dict[str, Any],
+    logged: list[str],
+) -> None:
+    """Test that request() logs JSON bodies and nothing of other bodies."""
+    uri = f"user/{auth_response['user_id']}/trackers"
+    url = f"{API_URL}{uri}"
+    async with aiointercept(mock_external_urls=True) as mock:
+        mock_auth(mock, auth_response)
+        mock.get(url, **kwargs)
+
+        api = API("test@example.com", "password")
+        with caplog.at_level(logging.DEBUG, logger="aiotractive.api"):
+            await api.request(uri)
+        await api.close()
+
+    responses = [m for m in caplog.messages if m.startswith(f"Response {url}")]
+    assert responses == [m.format(url=url) for m in logged]
+    assert "test_access_token_xyz" not in caplog.text
 
 
 async def test_request_retries_429_and_preserves_client_error_cause(

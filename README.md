@@ -152,24 +152,39 @@ async with Tractive("email", "password", fetch_delay=2.0) as client:
 - `async_fetch_status()` refreshes every trackable via REST (fetching trackables first if
   needed) and returns `client.status`. Values are merged, so switch states received from events
   are kept.
+- `async_refresh_pet_details()` re-requests the details of every cached trackable
+  (sequentially with `fetch_delay` between pets), updates `Trackable.pet_details` and
+  `status.pets[pet_id].weight`, and returns `client.status`. Fetches trackables first if
+  none are cached. Raises `TractiveError` or `UnauthorizedError` like other fetchers.
 - `client.status` is a `TractiveStatus` with `trackers: dict[str, TrackerStatus]` and
   `pets: dict[str, PetStatus]`, keyed by tracker ID and pet ID.
   - `TrackerStatus`: `battery_level`, `tracker_state`, `battery_charging`, `power_saving`,
     `power_saving_zone`, `latitude`, `longitude`, `accuracy`, `sensor_used`, `buzzer`, `led`,
     `live_tracking`.
   - `PetStatus`: `daily_goal`, `minutes_active`, `minutes_day_sleep`, `minutes_night_sleep`,
-    `minutes_rest`.
+    `minutes_rest`, `weight` (in grams).
   - Unknown values are `None`. Switch states (`buzzer`, `led`, `live_tracking`) are only
     available from events.
 - `subscribe_updates(listener)` registers a callback. It is called with `None` when the status
   changed or the channel (re)connected, and with an exception on a channel error: a
   `TractiveError` is transient and the channel reconnects automatically after 10 seconds, an
   `UnauthorizedError` is terminal and stops listening.
-- `listen()` consumes events and updates `client.status` until cancelled. Run it as a task and
-  cancel it to stop, or use `await client.async_start_listener()` /
-  `await client.async_stop_listener()`, which do that for you (`close()` stops it too).
+- `listen()` consumes events and updates `client.status` until cancelled. The Tractive API
+  does not push pet profile changes (a weight edited in the app produces no event), so while
+  `listen()` runs, pet details are refreshed via `async_refresh_pet_details()` every 30 minutes
+  (`PET_DETAILS_REFRESH_INTERVAL`, 1800 seconds), counted from the last fetch
+  (`async_fetch_trackables()` / `async_refresh_pet_details()`) or from the start of `listen()`,
+  whichever is later. The update listener is called with `None` after a successful refresh. A
+  `TractiveError` during refresh is logged as a warning, previous values are kept, the cached
+  trackables are dropped so the next refresh fetches them again, and the attempt counts toward
+  the interval; `UnauthorizedError` stops listening. Run it as a task and cancel it to stop, or
+  use `await client.async_start_listener()` / `await client.async_stop_listener()`, which do
+  that for you (`close()` stops it too).
 - `fetch_delay` (default `2.0` seconds) is the pause between the REST requests of consecutive
   trackables, to avoid HTTP 429 (too many requests) responses.
+- Events without a known message type or `tracker_id` are ignored and logged at debug level
+  (`Ignoring event ...`). Supported events and the bodies of REST responses are logged at
+  debug level by the `aiotractive.tractive` and `aiotractive.api` loggers.
 - Trackers returned by `client.tracker()` and `client.trackers()` are bound to `client.status`:
   when a `set_buzzer_active`, `set_led_active` or `set_live_tracking_active` command is
   accepted, the switch state is updated optimistically before the confirming event arrives.

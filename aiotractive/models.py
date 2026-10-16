@@ -34,13 +34,14 @@ class TrackerStatus:
 
 @dataclass(slots=True)
 class PetStatus:
-    """Health overview of one pet."""
+    """Health overview and weight of one pet."""
 
     daily_goal: int | None = None
     minutes_active: int | None = None
     minutes_day_sleep: int | None = None
     minutes_night_sleep: int | None = None
     minutes_rest: int | None = None
+    weight: int | None = None
 
 
 @dataclass(slots=True)
