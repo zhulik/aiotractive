@@ -182,7 +182,8 @@ async with Tractive("email", "password", fetch_delay=2.0) as client:
 - `fetch_delay` (default `2.0` seconds) is the pause between the REST requests of consecutive
   trackables, to avoid HTTP 429 (too many requests) responses.
 - Events without a known message type or `tracker_id` are ignored and logged at debug level
-  (`Ignoring event ...`).
+  (`Ignoring event ...`). Supported events and the bodies of REST responses are logged at
+  debug level by the `aiotractive.tractive` and `aiotractive.api` loggers.
 - Trackers returned by `client.tracker()` and `client.trackers()` are bound to `client.status`:
   when a `set_buzzer_active`, `set_led_active` or `set_live_tracking_active` command is
   accepted, the switch state is updated optimistically before the confirming event arrives.

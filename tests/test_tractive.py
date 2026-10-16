@@ -157,14 +157,22 @@ def idle_refresh(client: Tractive) -> None:
             },
         ),
         ({"tracker_id": TRACKER_ID}, {}),
-        ({"message": "tracker_status"}, {}),
+        ({"message": "tracker_status", "tracker_id": TRACKER_ID}, {}),
     ],
 )
 def test_update_status_tracker(
-    client: Tractive, event: dict[str, Any], changes: dict[str, Any]
+    client: Tractive,
+    event: dict[str, Any],
+    changes: dict[str, Any],
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     """Test that tracker events update only the fields they carry."""
-    client._update_status(event)
+    with caplog.at_level(logging.DEBUG, logger="aiotractive.tractive"):
+        client._update_status(event)
+
+    assert [r.getMessage() for r in caplog.records if TRACKER_ID in r.getMessage()] == [
+        f"Event {event.get('message')} for tracker {TRACKER_ID}: {event}"
+    ]
 
     assert client.status.trackers[TRACKER_ID] == dataclasses.replace(
         BASE_STATUS, **changes
@@ -286,12 +294,20 @@ def test_update_status_dedup_same_tracker(client: Tractive) -> None:
     ],
 )
 def test_update_status_health_overview(
-    client: Tractive, event: dict[str, Any], expected: PetStatus
+    client: Tractive,
+    event: dict[str, Any],
+    expected: PetStatus,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     """Test that health overview events update the pet status."""
     client.status.pets[PET_ID] = dataclasses.replace(FULL_PET_STATUS)
 
-    client._update_status(event)
+    with caplog.at_level(logging.DEBUG, logger="aiotractive.tractive"):
+        client._update_status(event)
+
+    assert [r.getMessage() for r in caplog.records if PET_ID in r.getMessage()] == [
+        f"Health overview event for pet {PET_ID}: {event.get('content', event)}"
+    ]
 
     assert client.status.pets[PET_ID] == expected
 
@@ -317,6 +333,7 @@ def test_update_status_health_overview_without_pet_id(
     [
         {"message": "activity_data_updated", "pet_id": "x"},
         {"message": "command_confirmed", "device_id": "y"},
+        {"message": "tracker_status"},
     ],
 )
 def test_update_status_ignores_unknown_event(
@@ -334,6 +351,7 @@ def test_update_status_ignores_unknown_event(
         and r.getMessage() == f"Ignoring event {event['message']}"
         for r in caplog.records
     )
+    assert not any(" for tracker " in m for m in caplog.messages)
 
 
 @pytest.mark.parametrize(

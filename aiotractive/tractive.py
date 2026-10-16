@@ -167,6 +167,7 @@ class Tractive:
             pet_id = data.get("petId")
             if pet_id is None:
                 return
+            _LOGGER.debug("Health overview event for pet %s: %s", pet_id, data)
             update_pet_from_health_overview(
                 self.status.pets.setdefault(pet_id, PetStatus()), data
             )
@@ -176,6 +177,9 @@ class Tractive:
         if tracker_id is None:
             _LOGGER.debug("Ignoring event %s", event.get("message"))
             return
+        _LOGGER.debug(
+            "Event %s for tracker %s: %s", event.get("message"), tracker_id, event
+        )
         status = self.status.trackers.setdefault(tracker_id, TrackerStatus())
 
         hw_time = (event.get("hardware") or {}).get("time")

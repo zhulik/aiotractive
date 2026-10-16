@@ -148,8 +148,12 @@ class API:
                 "Content-Type" in response.headers
                 and "application/json" in response.headers["Content-Type"]
             ):
-                return await response.json()
-            return await response.read()
+                body = await response.json()
+                _LOGGER.debug("Response %s: %s", response.url, body)
+                return body
+            body = await response.read()
+            _LOGGER.debug("Response %s: %d bytes", response.url, len(body))
+            return body
 
     async def authenticate(self) -> dict[str, Any] | None:
         """Perform authentication."""
