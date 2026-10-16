@@ -47,24 +47,19 @@ async def test_auth_success(
 
 
 @pytest.mark.parametrize(
-    ("kwargs", "expected", "absent"),
+    ("kwargs", "logged"),
     [
-        ({"payload": {"pet": "rex"}}, "Response {url}: {{'pet': 'rex'}}", None),
-        (
-            {"body": b"secret-bytes", "content_type": "application/octet-stream"},
-            "Response {url}: 12 bytes",
-            "secret-bytes",
-        ),
+        ({"payload": {"pet": "rex"}}, ["Response {url}: {{'pet': 'rex'}}"]),
+        ({"body": b"secret-bytes", "content_type": "application/octet-stream"}, []),
     ],
 )
 async def test_request_logs_response_body(
     auth_response: dict[str, Any],
     caplog: pytest.LogCaptureFixture,
     kwargs: dict[str, Any],
-    expected: str,
-    absent: str | None,
+    logged: list[str],
 ) -> None:
-    """Test that request() logs JSON bodies and only the size of other bodies."""
+    """Test that request() logs JSON bodies and nothing of other bodies."""
     uri = f"user/{auth_response['user_id']}/trackers"
     url = f"{API_URL}{uri}"
     async with aiointercept(mock_external_urls=True) as mock:
@@ -76,10 +71,9 @@ async def test_request_logs_response_body(
             await api.request(uri)
         await api.close()
 
-    assert expected.format(url=url) in caplog.messages
+    responses = [m for m in caplog.messages if m.startswith(f"Response {url}")]
+    assert responses == [m.format(url=url) for m in logged]
     assert "test_access_token_xyz" not in caplog.text
-    if absent:
-        assert absent not in caplog.text
 
 
 async def test_request_retries_429_and_preserves_client_error_cause(
