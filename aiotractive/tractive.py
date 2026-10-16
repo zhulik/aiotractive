@@ -138,9 +138,7 @@ class Tractive:
         """Refresh the pet details every interval until an ``UnauthorizedError``."""
         started = time.monotonic()
         while True:
-            last = started
-            if self._pet_details_fetched is not None:
-                last = max(last, self._pet_details_fetched)
+            last = max(started, self._pet_details_fetched or started)
             delay = last + PET_DETAILS_REFRESH_INTERVAL - time.monotonic()
             if delay > 0:
                 # Re-check after waking: a manual fetch may have moved the due time.
@@ -155,6 +153,8 @@ class Tractive:
                 return
             except TractiveError as err:
                 _LOGGER.warning("Failed to refresh pet details: %s", err)
+                # A pet may have been removed; re-fetch the trackables next time.
+                self._trackables = None
             except Exception:  # keep the channel alive, retry next interval
                 _LOGGER.exception("Failed to refresh pet details")
             else:
@@ -190,6 +190,12 @@ class Tractive:
             update_tracker_position(status, event)
         update_tracker_switches(status, event)
 
+    def _apply_pet_details(self, trackable: Trackable) -> None:
+        """Copy the pet weight from the cached details to the status."""
+        self.status.pets.setdefault(
+            trackable.pet_id, PetStatus()
+        ).weight = trackable.weight
+
     async def async_fetch_trackables(self) -> list[Trackable]:
         """Fetch the pets that have a tracker assigned, with their details."""
         trackables: list[Trackable] = []
@@ -221,9 +227,7 @@ class Tractive:
                 tracker_details=tracker_details,
             )
             trackables.append(trackable)
-            self.status.pets.setdefault(
-                trackable.pet_id, PetStatus()
-            ).weight = trackable.weight
+            self._apply_pet_details(trackable)
         self._trackables = trackables
         self._details_fresh = True
         self._pet_details_fetched = time.monotonic()
@@ -254,10 +258,10 @@ class Tractive:
                 hw_info,
                 pos_report,
             )
-            pet_status = self.status.pets.setdefault(trackable.pet_id, PetStatus())
-            pet_status.weight = trackable.weight
             if health:
-                update_pet_from_health_overview(pet_status, health)
+                update_pet_from_health_overview(
+                    self.status.pets.setdefault(trackable.pet_id, PetStatus()), health
+                )
         return self.status
 
     async def async_refresh_pet_details(self) -> TractiveStatus:
@@ -273,9 +277,7 @@ class Tractive:
                 msg = f"Tractive API returns incomplete data for pet {trackable.pet_id}"
                 raise TractiveError(msg)
             trackable.pet_details = data
-            self.status.pets.setdefault(
-                trackable.pet_id, PetStatus()
-            ).weight = trackable.weight
+            self._apply_pet_details(trackable)
         self._pet_details_fetched = time.monotonic()
         return self.status
 

@@ -175,10 +175,11 @@ async with Tractive("email", "password", fetch_delay=2.0) as client:
   (`PET_DETAILS_REFRESH_INTERVAL`, 1800 seconds), counted from the last fetch
   (`async_fetch_trackables()` / `async_refresh_pet_details()`) or from the start of `listen()`,
   whichever is later. The update listener is called with `None` after a successful refresh. A
-  `TractiveError` during refresh is logged as a warning, previous values are kept and the
-  attempt counts toward the interval; `UnauthorizedError` stops listening. Run it as a task and
-  cancel it to stop, or use `await client.async_start_listener()` /
-  `await client.async_stop_listener()`, which do that for you (`close()` stops it too).
+  `TractiveError` during refresh is logged as a warning, previous values are kept, the cached
+  trackables are dropped so the next refresh fetches them again, and the attempt counts toward
+  the interval; `UnauthorizedError` stops listening. Run it as a task and cancel it to stop, or
+  use `await client.async_start_listener()` / `await client.async_stop_listener()`, which do
+  that for you (`close()` stops it too).
 - `fetch_delay` (default `2.0` seconds) is the pause between the REST requests of consecutive
   trackables, to avoid HTTP 429 (too many requests) responses.
 - Events without a known message type or `tracker_id` are ignored and logged at debug level
