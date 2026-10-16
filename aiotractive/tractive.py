@@ -134,7 +134,7 @@ class Tractive:
             await self.async_refresh_pet_details()
         except UnauthorizedError:
             raise
-        except (TractiveError, KeyError, TypeError, AttributeError, ValueError) as err:
+        except TractiveError as err:
             _LOGGER.warning("Failed to refresh pet details: %s", err)
 
     def _update_status(self, event: dict[str, Any]) -> None:
@@ -242,6 +242,9 @@ class Tractive:
             if index and self._fetch_delay:
                 await asyncio.sleep(self._fetch_delay)
             data = await self.trackable_object(trackable.pet_id).details()
+            if not isinstance(data, dict) or not isinstance(data.get("details"), dict):
+                msg = f"Tractive API returns incomplete data for pet {trackable.pet_id}"
+                raise TractiveError(msg)
             trackable.pet_details = data
             self.status.pets.setdefault(
                 trackable.pet_id, PetStatus()

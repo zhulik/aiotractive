@@ -462,13 +462,11 @@ async def test_listen_handshake_refresh_rate_limited(
 
 
 @pytest.mark.parametrize(
-    ("response", "details_kept"),
-    [(TractiveError("boom"), True), ({"_id": PET_ID}, False)],
+    "response", [TractiveError("boom"), {"_id": PET_ID}, {"details": None}]
 )
 async def test_listen_handshake_refresh_error_is_logged(
     client: Tractive,
     response: dict[str, Any] | Exception,
-    details_kept: bool,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     """Test that a failed or malformed pet details refresh is logged."""
@@ -491,7 +489,7 @@ async def test_listen_handshake_refresh_error_is_logged(
     assert client.status.trackers[TRACKER_ID].battery_level == 80
     assert channel_cls.call_count == 1
     sleep.assert_not_called()
-    assert trackable.pet_details == (old_details if details_kept else response)
+    assert trackable.pet_details == old_details
     assert client._pet_details_fetched is not None
     assert any(
         r.levelno == logging.WARNING
@@ -913,13 +911,26 @@ async def test_refresh_pet_details_fetches_trackables_first(client: Tractive) ->
     client._api.request.assert_not_called()
 
 
-@pytest.mark.parametrize("error", [TractiveError("boom"), UnauthorizedError("bye")])
-async def test_refresh_pet_details_error(client: Tractive, error: Exception) -> None:
-    """Test that request errors propagate and leave the timestamp unset."""
-    client._trackables = [make_trackable(PET_ID)]
-    client._api.request = mock_request({"trackable_object/pet_id_123": error})
+@pytest.mark.parametrize(
+    ("response", "expected"),
+    [
+        (TractiveError("boom"), TractiveError),
+        (UnauthorizedError("bye"), UnauthorizedError),
+        ({"_id": PET_ID}, TractiveError),
+        ({"details": None}, TractiveError),
+    ],
+)
+async def test_refresh_pet_details_error(
+    client: Tractive, response: dict[str, Any] | Exception, expected: type[Exception]
+) -> None:
+    """Test that bad responses raise and leave details and timestamp untouched."""
+    trackable = make_trackable(PET_ID)
+    old_details = copy.deepcopy(trackable.pet_details)
+    client._trackables = [trackable]
+    client._api.request = mock_request({"trackable_object/pet_id_123": response})
 
-    with pytest.raises(type(error)):
+    with pytest.raises(expected):
         await client.async_refresh_pet_details()
 
+    assert trackable.pet_details == old_details
     assert client._pet_details_fetched is None
