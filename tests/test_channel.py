@@ -124,10 +124,9 @@ async def test_listen_multiple_events(channel: Channel, mock_api: MagicMock) -> 
     while not channel._queue.empty():
         events.append(await channel._queue.get())
 
-    assert len(events) == 4  # Three events + one cancelled event
+    assert len(events) == 3  # Two events + one cancelled event
     assert events[0]["event"]["message"] == "tracker_status"
-    assert events[1]["event"]["message"] == "handshake"
-    assert events[2]["event"]["message"] == "position"
+    assert events[1]["event"]["message"] == "position"
 
 
 async def test_listen_keep_alive(channel: Channel, mock_api: MagicMock) -> None:
@@ -147,6 +146,31 @@ async def test_listen_keep_alive(channel: Channel, mock_api: MagicMock) -> None:
     await task
 
     assert channel._last_keep_alive is not None
+
+    events = []
+    while not channel._queue.empty():
+        events.append(await channel._queue.get())
+
+    # Queue should only have the cancelled event, no keep-alive events
+    assert events
+    assert len(events) == 1
+    event = events[0]
+    assert event["type"] == "cancelled"
+
+
+async def test_listen_handshake(channel: Channel, mock_api: MagicMock) -> None:
+    """Test that _listen ignores handshake messages."""
+    event_data = b'{"message": "handshake"}'
+    mock_response = create_mock_response([event_data])
+
+    mock_context = AsyncMock()
+    mock_context.__aenter__.return_value = mock_response
+    mock_api.session.request.return_value = mock_context
+
+    task = asyncio.create_task(channel._listen())
+    await asyncio.sleep(0.1)
+    task.cancel()
+    await task
 
     events = []
     while not channel._queue.empty():
@@ -330,23 +354,19 @@ def mock_channel_stream(mock_api: MagicMock, events: list[bytes]) -> None:
 
 
 @pytest.mark.parametrize(
-    ("events", "expected_messages"),
+    ("events", "expected_calls"),
     [
-        ([b'{"message": "handshake"}'], ["handshake"]),
-        ([b'{"message": "handshake"}', b'{"message": "keep-alive"}'], ["handshake"]),
-        (
-            [b'{"message": "keep-alive"}', b'{"message": "tracker_status"}'],
-            ["tracker_status"],
-        ),
+        ([b'{"message": "handshake"}'], 1),
+        ([b'{"message": "handshake"}', b'{"message": "keep-alive"}'], 1),
+        ([b'{"message": "keep-alive"}', b'{"message": "tracker_status"}'], 0),
     ],
 )
-async def test_listen_queues_handshake_not_keep_alive(
-    channel: Channel,
-    mock_api: MagicMock,
-    events: list[bytes],
-    expected_messages: list[str],
+async def test_listen_on_connected(
+    mock_api: MagicMock, events: list[bytes], expected_calls: int
 ) -> None:
-    """Test that _listen queues handshake messages but not keep-alive messages."""
+    """Test that on_connected is called only for handshake messages."""
+    on_connected = MagicMock()
+    channel = Channel(mock_api, on_connected=on_connected)
     mock_channel_stream(mock_api, events)
 
     task = asyncio.create_task(channel._listen())
@@ -354,29 +374,28 @@ async def test_listen_queues_handshake_not_keep_alive(
     task.cancel()
     await task
 
-    items = []
+    assert on_connected.call_count == expected_calls
+    events_in_queue = []
     while not channel._queue.empty():
-        items.append(await channel._queue.get())
-    assert [item["event"]["message"] for item in items[:-1]] == expected_messages
-    assert items[-1]["type"] == "cancelled"
-
-
-async def test_listen_yields_handshake(channel: Channel, mock_api: MagicMock) -> None:
-    """Test that listen yields handshake events and skips keep-alive events."""
-    mock_channel_stream(
-        mock_api,
-        [
-            b'{"message": "handshake"}',
-            b'{"message": "keep-alive"}',
-            b'{"message": "tracker_status", "id": "1"}',
-        ],
+        events_in_queue.append(await channel._queue.get())
+    assert all(
+        item["type"] != "event" or item["event"]["message"] != "handshake"
+        for item in events_in_queue
     )
 
-    async with contextlib.aclosing(channel.listen()) as gen:
-        received = [await anext(gen), await anext(gen)]
 
-    assert [event["message"] for event in received] == ["handshake", "tracker_status"]
-    assert_internal_tasks_done(channel)
+async def test_listen_handshake_without_on_connected(
+    channel: Channel, mock_api: MagicMock
+) -> None:
+    """Test that a handshake without on_connected callback does not fail."""
+    mock_channel_stream(mock_api, [b'{"message": "handshake"}'])
+
+    task = asyncio.create_task(channel._listen())
+    await asyncio.sleep(0.1)
+    task.cancel()
+    await task
+
+    assert (await channel._queue.get())["type"] == "cancelled"
 
 
 def assert_internal_tasks_done(channel: Channel) -> None:
@@ -520,7 +539,8 @@ async def test_listen_stream_closed_after_data_reconnects_silently(
     mock_api: MagicMock, stream_error: Exception
 ) -> None:
     """Test that a stream closed after data reconnects without error or backoff."""
-    channel = Channel(mock_api)
+    on_connected = MagicMock()
+    channel = Channel(mock_api, on_connected=on_connected)
     mock_api.session.request.side_effect = [
         create_mock_context(
             [b'{"message": "handshake"}', b'{"message": "position", "id": "1"}'],
@@ -534,14 +554,9 @@ async def test_listen_stream_closed_after_data_reconnects_silently(
     await run_listen(channel)
 
     items = [item for item in drain(channel) if item["type"] != "cancelled"]
-    assert [item["type"] for item in items] == ["event"] * 4
-    assert [item["event"]["message"] for item in items] == [
-        "handshake",
-        "position",
-        "handshake",
-        "position",
-    ]
-    assert [item["event"].get("id") for item in items] == [None, "1", None, "2"]
+    assert [item["type"] for item in items] == ["event", "event"]
+    assert [item["event"]["id"] for item in items] == ["1", "2"]
+    assert on_connected.call_count == 2
     mock_api.retry_delay.assert_not_called()
     assert mock_api.session.request.call_count == 2
 

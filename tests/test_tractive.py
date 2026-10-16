@@ -7,9 +7,9 @@ import copy
 import dataclasses
 import logging
 import time
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Iterator
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, call, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -63,8 +63,6 @@ HEALTH_OVERVIEW: dict[str, Any] = {
     "activity": {"minutesGoal": 200, "minutesActive": 150},
 }
 
-HANDSHAKE: dict[str, Any] = {"message": "handshake"}
-
 FULL_PET_STATUS = PetStatus(
     daily_goal=200,
     minutes_active=150,
@@ -106,6 +104,36 @@ async def wait_forever() -> AsyncGenerator[dict[str, Any]]:
     """Never yield anything."""
     await asyncio.Event().wait()
     yield {}
+
+
+@pytest.fixture
+def fake_time() -> Iterator[tuple[list[float], AsyncMock]]:
+    """Patch monotonic time and asyncio.sleep; sleeping advances the clock."""
+    now = [1000.0]
+    real_sleep = asyncio.sleep
+
+    async def advance(delay: float) -> None:
+        now[0] += delay
+        # Yield so a loop that only sleeps cannot block the event loop forever.
+        await real_sleep(0)
+
+    with (
+        patch("aiotractive.tractive.time", MagicMock(monotonic=lambda: now[0])),
+        patch(
+            "aiotractive.tractive.asyncio.sleep", AsyncMock(side_effect=advance)
+        ) as sleep,
+    ):
+        yield now, sleep
+
+
+@pytest.fixture
+def idle_refresh(client: Tractive) -> None:
+    """Keep the refresh loop idle in tests that mock asyncio.sleep."""
+
+    async def idle() -> None:
+        await asyncio.Event().wait()
+
+    client._refresh_pet_details_periodically = idle
 
 
 @pytest.mark.parametrize(
@@ -339,6 +367,7 @@ async def test_listen_skips_malformed_event(
     assert any(TRACKER_ID in r.getMessage() for r in debugs)
 
 
+@pytest.mark.usefixtures("idle_refresh")
 async def test_listen_listener_error_is_logged(
     client: Tractive, caplog: pytest.LogCaptureFixture
 ) -> None:
@@ -363,6 +392,7 @@ async def test_listen_listener_error_is_logged(
     )
 
 
+@pytest.mark.usefixtures("idle_refresh")
 async def test_listen_reconnects_after_error(client: Tractive) -> None:
     """Test that a transient error is reported, dedup reset and reconnected."""
     listener = MagicMock()
@@ -392,6 +422,7 @@ async def test_listen_reconnects_after_error(client: Tractive) -> None:
     assert client.status.trackers[TRACKER_ID].battery_level == 30
 
 
+@pytest.mark.usefixtures("idle_refresh")
 async def test_listen_reconnects_after_unexpected_error(client: Tractive) -> None:
     """Test that an unexpected error is reported and reconnected."""
     listener = MagicMock()
@@ -411,127 +442,122 @@ async def test_listen_reconnects_after_unexpected_error(client: Tractive) -> Non
     assert [c.args for c in listener.call_args_list] == [(unexpected,), (terminal,)]
 
 
-async def test_listen_handshake_refreshes_pet_details_first_time(
-    client: Tractive,
-) -> None:
-    """Test that the first handshake refreshes pet details, then notifies."""
-    order: list[Any] = []
-    listener = MagicMock(side_effect=order.append)
+async def test_listen_on_connected_notifies(client: Tractive) -> None:
+    """Test that the channel connect callback notifies the listener."""
+    listener = MagicMock()
     client.subscribe_updates(listener)
-    refresh = AsyncMock(side_effect=lambda: order.append("refresh"))
-    client.async_refresh_pet_details = refresh
-    error = UnauthorizedError("bye")
-    channel_cls = mock_channel(events_then_raise([HANDSHAKE], error))
-    assert client._pet_details_fetched is None
+    channel_cls = mock_channel(events_then_raise([], UnauthorizedError("bye")))
 
     with patch("aiotractive.tractive.Channel", channel_cls):
         await client.listen()
+    listener.reset_mock()
+    channel_cls.call_args.kwargs["on_connected"]()
 
-    assert order == ["refresh", None, error]
-    refresh.assert_awaited_once_with()
+    listener.assert_called_once_with(None)
+
+
+@pytest.mark.parametrize("fetched_ago", [None, 2 * PET_DETAILS_REFRESH_INTERVAL])
+async def test_listen_refreshes_pet_details_periodically(
+    client: Tractive,
+    fake_time: tuple[list[float], AsyncMock],
+    fetched_ago: float | None,
+) -> None:
+    """Test that pet details are refreshed every interval from the loop start."""
+    now, sleep = fake_time
+    if fetched_ago is not None:
+        client._pet_details_fetched = now[0] - fetched_ago
+    listener = MagicMock()
+    client.subscribe_updates(listener)
+    error = UnauthorizedError("bye")
+    client.async_refresh_pet_details = AsyncMock(side_effect=[None, error])
+
+    with patch("aiotractive.tractive.Channel", mock_channel(wait_forever())):
+        await client.listen()
+
+    assert [c.args[0] for c in sleep.await_args_list] == [
+        PET_DETAILS_REFRESH_INTERVAL,
+        PET_DETAILS_REFRESH_INTERVAL,
+    ]
+    assert client.async_refresh_pet_details.await_count == 2
+    assert [c.args for c in listener.call_args_list] == [(None,), (error,)]
+    assert client._pet_details_fetched == now[0]
+    assert asyncio.all_tasks() == {asyncio.current_task()}
+
+
+async def test_listen_manual_fetch_postpones_refresh(
+    client: Tractive, fake_time: tuple[list[float], AsyncMock]
+) -> None:
+    """Test that a fetch during the wait pushes the next refresh out."""
+    now, sleep = fake_time
+
+    async def wait_with_manual_fetch(delay: float) -> None:
+        now[0] += delay
+        if client._pet_details_fetched is None:
+            client._pet_details_fetched = now[0] - 300
+
+    sleep.side_effect = wait_with_manual_fetch
+    client.async_refresh_pet_details = AsyncMock(side_effect=UnauthorizedError("bye"))
+
+    with patch("aiotractive.tractive.Channel", mock_channel(wait_forever())):
+        await client.listen()
+
+    assert [c.args[0] for c in sleep.await_args_list] == [
+        PET_DETAILS_REFRESH_INTERVAL,
+        PET_DETAILS_REFRESH_INTERVAL - 300,
+    ]
+    client.async_refresh_pet_details.assert_awaited_once_with()
 
 
 @pytest.mark.parametrize(
-    ("age", "refreshes"),
+    ("raised", "level", "message"),
     [
-        (PET_DETAILS_REFRESH_INTERVAL + 1, 1),
-        (PET_DETAILS_REFRESH_INTERVAL, 1),
-        (PET_DETAILS_REFRESH_INTERVAL - 60, 0),
-        (0, 0),
+        (TractiveError("boom"), logging.WARNING, "Failed to refresh pet details: boom"),
+        (KeyError("_id"), logging.ERROR, "Failed to refresh pet details"),
     ],
 )
-async def test_listen_handshake_refresh_rate_limited(
-    client: Tractive, age: float, refreshes: int
+async def test_listen_refresh_error_is_logged(
+    client: Tractive,
+    fake_time: tuple[list[float], AsyncMock],
+    caplog: pytest.LogCaptureFixture,
+    raised: Exception,
+    level: int,
+    message: str,
 ) -> None:
-    """Test that a handshake refreshes pet details at most once per interval."""
+    """Test that a failed refresh is logged and counts toward the interval."""
+    now, sleep = fake_time
     listener = MagicMock()
     client.subscribe_updates(listener)
-    client.async_refresh_pet_details = AsyncMock()
-    client._update_status = MagicMock()
-    client._pet_details_fetched = time.monotonic() - age
     error = UnauthorizedError("bye")
-    channel_cls = mock_channel(events_then_raise([HANDSHAKE], error))
+    client.async_refresh_pet_details = AsyncMock(side_effect=[raised, error])
 
-    with patch("aiotractive.tractive.Channel", channel_cls):
+    with patch("aiotractive.tractive.Channel", mock_channel(wait_forever())):
         await client.listen()
 
-    assert client.async_refresh_pet_details.await_count == refreshes
-    assert [c.args for c in listener.call_args_list] == [(None,), (error,)]
-    client._update_status.assert_not_called()
-    assert channel_cls.call_args == call(client._api)
+    assert [c.args[0] for c in sleep.await_args_list] == [
+        PET_DETAILS_REFRESH_INTERVAL,
+        PET_DETAILS_REFRESH_INTERVAL,
+    ]
+    assert client.async_refresh_pet_details.await_count == 2
+    assert [c.args for c in listener.call_args_list] == [(error,)]
+    assert client._pet_details_fetched == now[0]
+    assert any(r.levelno == level and r.getMessage() == message for r in caplog.records)
 
 
-@pytest.mark.parametrize(
-    "response", [TractiveError("boom"), {"_id": PET_ID}, {"details": None}]
-)
-async def test_listen_handshake_refresh_error_is_logged(
-    client: Tractive,
-    response: dict[str, Any] | Exception,
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    """Test that a failed or malformed pet details refresh is logged."""
-    listener = MagicMock()
-    client.subscribe_updates(listener)
-    trackable = make_trackable(PET_ID)
-    old_details = copy.deepcopy(trackable.pet_details)
-    client._trackables = [trackable]
-    client._api.request = mock_request({"trackable_object/pet_id_123": response})
-    error = UnauthorizedError("bye")
-    channel_cls = mock_channel(events_then_raise([HANDSHAKE, FULL_EVENT], error))
+async def test_listen_task_error_cancels_other_task(client: Tractive) -> None:
+    """Test that an unexpected task error propagates without leaking tasks."""
+
+    async def fail() -> None:
+        raise RuntimeError("boom")
+
+    client._refresh_pet_details_periodically = fail
 
     with (
-        patch("aiotractive.tractive.Channel", channel_cls),
-        patch("aiotractive.tractive.asyncio.sleep", new_callable=AsyncMock) as sleep,
+        patch("aiotractive.tractive.Channel", mock_channel(wait_forever())),
+        pytest.raises(RuntimeError, match="boom"),
     ):
         await client.listen()
 
-    assert [c.args for c in listener.call_args_list] == [(None,), (None,), (error,)]
-    assert client.status.trackers[TRACKER_ID].battery_level == 80
-    assert channel_cls.call_count == 1
-    sleep.assert_not_called()
-    assert trackable.pet_details == old_details
-    assert client._pet_details_fetched is not None
-    assert any(
-        r.levelno == logging.WARNING
-        and r.name == "aiotractive.tractive"
-        and "Failed to refresh pet details" in r.getMessage()
-        for r in caplog.records
-    )
-
-
-async def test_listen_handshake_refresh_unauthorized_ends_loop(
-    client: Tractive,
-) -> None:
-    """Test that an UnauthorizedError from the refresh is reported and ends listen."""
-    listener = MagicMock()
-    client.subscribe_updates(listener)
-    error = UnauthorizedError("expired")
-    client.async_refresh_pet_details = AsyncMock(side_effect=error)
-    channel_cls = mock_channel(
-        events_then_raise([HANDSHAKE, FULL_EVENT], TractiveError("unreached"))
-    )
-
-    with patch("aiotractive.tractive.Channel", channel_cls):
-        await client.listen()
-
-    assert [c.args for c in listener.call_args_list] == [(error,)]
-    assert client.status.trackers[TRACKER_ID] == BASE_STATUS
-    assert channel_cls.call_count == 1
-
-
-async def test_events_skips_handshake(client: Tractive) -> None:
-    """Test that events() yields channel events but not handshakes."""
-    channel_cls = mock_channel(
-        events_then_raise([HANDSHAKE, FULL_EVENT], UnauthorizedError("bye"))
-    )
-
-    with patch("aiotractive.tractive.Channel", channel_cls):
-        events = client.events()
-        first = await anext(events)
-        with pytest.raises(UnauthorizedError):
-            await anext(events)
-
-    assert first == FULL_EVENT
+    assert asyncio.all_tasks() == {asyncio.current_task()}
 
 
 async def test_listen_cancel(client: Tractive) -> None:
@@ -542,6 +568,8 @@ async def test_listen_cancel(client: Tractive) -> None:
         task.cancel()
         with pytest.raises(asyncio.CancelledError):
             await task
+
+    assert asyncio.all_tasks() == {asyncio.current_task()}
 
 
 async def test_start_stop_listener(client: Tractive) -> None:

@@ -118,9 +118,6 @@ the LED and the live tracking.
 All following events will have the same name, but only include one of these: either a position, battery info, or a buzzer/LED/live
 status.
 
-`events()` does not yield handshake messages; the lower-level `Channel.listen()` does. `Channel`
-no longer takes an `on_connected` callback.
-
 #### Status and push updates
 
 The client can keep a typed, merged status of every tracker and pet, filled from REST and kept
@@ -173,15 +170,14 @@ async with Tractive("email", "password", fetch_delay=2.0) as client:
   `TractiveError` is transient and the channel reconnects automatically after 10 seconds, an
   `UnauthorizedError` is terminal and stops listening.
 - `listen()` consumes events and updates `client.status` until cancelled. The Tractive API
-  does not push pet profile changes (a weight edited in the app produces no event), so when
-  the event channel (re)connects, pet details are refreshed via `async_refresh_pet_details()`,
-  rate-limited to at most once per 30 minutes (`PET_DETAILS_REFRESH_INTERVAL`, 1800
-  seconds); the initial `async_fetch_trackables()` counts as a fetch. A `TractiveError`
-  during refresh is logged as a warning and previous values are kept; a failed refresh also
-  counts toward the 30-minute interval, so it is not retried on the next reconnect;
-  `UnauthorizedError` stops listening. On every (re)connect the update listener is called with
-  `None`, after any refresh. Run as a task and cancel it to stop, or use
-  `await client.async_start_listener()` /
+  does not push pet profile changes (a weight edited in the app produces no event), so while
+  `listen()` runs, pet details are refreshed via `async_refresh_pet_details()` every 30 minutes
+  (`PET_DETAILS_REFRESH_INTERVAL`, 1800 seconds), counted from the last fetch
+  (`async_fetch_trackables()` / `async_refresh_pet_details()`) or from the start of `listen()`,
+  whichever is later. The update listener is called with `None` after a successful refresh. A
+  `TractiveError` during refresh is logged as a warning, previous values are kept and the
+  attempt counts toward the interval; `UnauthorizedError` stops listening. Run it as a task and
+  cancel it to stop, or use `await client.async_start_listener()` /
   `await client.async_stop_listener()`, which do that for you (`close()` stops it too).
 - `fetch_delay` (default `2.0` seconds) is the pause between the REST requests of consecutive
   trackables, to avoid HTTP 429 (too many requests) responses.

@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import time
 from asyncio.exceptions import TimeoutError as AIOTimeoutError
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Callable
 from http import HTTPStatus
 from typing import TYPE_CHECKING, Any
 
@@ -21,14 +21,17 @@ class Channel:
     """Channel for real-time events from the Tractive REST API."""
 
     CHANNEL_URL = "https://channel.tractive.com/3/channel"
-    IGNORE_MESSAGES = ("keep-alive",)
+    IGNORE_MESSAGES = ("handshake", "keep-alive")
 
     KEEP_ALIVE_TIMEOUT = 60  # seconds
     CHECK_CONNECTION_TIME = 5  # seconds
 
-    def __init__(self, api: API) -> None:
+    def __init__(
+        self, api: API, on_connected: Callable[[], None] | None = None
+    ) -> None:
         """Initialize the channel."""
         self._api = api
+        self._on_connected = on_connected
         self._last_keep_alive: float | None = None
         self._listen_task: asyncio.Task[None] | None = None
         self._check_connection_task: asyncio.Task[None] | None = None
@@ -100,6 +103,12 @@ class Channel:
                         event = orjson.loads(data)
                         if event["message"] == "keep-alive":
                             self._last_keep_alive = time.time()
+                            continue
+                        if (
+                            event["message"] == "handshake"
+                            and self._on_connected is not None
+                        ):
+                            self._on_connected()
                         if event["message"] in self.IGNORE_MESSAGES:
                             continue
                         await self._queue.put({"type": "event", "event": event})

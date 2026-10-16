@@ -7,6 +7,7 @@ import contextlib
 import logging
 import time
 from collections.abc import AsyncIterator, Callable
+from functools import partial
 from types import TracebackType
 from typing import Any
 
@@ -94,17 +95,29 @@ class Tractive:
 
     async def listen(self) -> None:
         """Consume real-time events and keep ``status`` up to date."""
+        tasks = {
+            asyncio.create_task(self._listen_channel()),
+            asyncio.create_task(self._refresh_pet_details_periodically()),
+        }
+        try:
+            done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+            for task in done:
+                task.result()
+        finally:
+            for task in tasks:
+                task.cancel()
+            # wait() never raises task errors, so every task is awaited.
+            await asyncio.wait(tasks)
+
+    async def _listen_channel(self) -> None:
+        """Consume channel events until an ``UnauthorizedError``."""
         while True:
             self._last_hw_time.clear()
             self._last_pos_time.clear()
             try:
-                channel = Channel(self._api)
+                channel = Channel(self._api, on_connected=partial(self._notify, None))
                 async with contextlib.aclosing(channel.listen()) as events:
                     async for event in events:
-                        if event.get("message") == "handshake":
-                            await self._handle_handshake()
-                            self._notify(None)
-                            continue
                         try:
                             self._update_status(event)
                         except (KeyError, TypeError, AttributeError, ValueError) as err:
@@ -121,21 +134,31 @@ class Tractive:
                 self._notify(exc)
                 await asyncio.sleep(RECONNECT_INTERVAL)
 
-    async def _handle_handshake(self) -> None:
-        """Refresh the pet details after a channel (re)connect, rate-limited."""
-        if (
-            self._pet_details_fetched is not None
-            and time.monotonic() - self._pet_details_fetched
-            < PET_DETAILS_REFRESH_INTERVAL
-        ):
-            return
-        self._pet_details_fetched = time.monotonic()
-        try:
-            await self.async_refresh_pet_details()
-        except UnauthorizedError:
-            raise
-        except TractiveError as err:
-            _LOGGER.warning("Failed to refresh pet details: %s", err)
+    async def _refresh_pet_details_periodically(self) -> None:
+        """Refresh the pet details every interval until an ``UnauthorizedError``."""
+        started = time.monotonic()
+        while True:
+            last = started
+            if self._pet_details_fetched is not None:
+                last = max(last, self._pet_details_fetched)
+            delay = last + PET_DETAILS_REFRESH_INTERVAL - time.monotonic()
+            if delay > 0:
+                # Re-check after waking: a manual fetch may have moved the due time.
+                await asyncio.sleep(delay)
+                continue
+            # A failed attempt also counts, so errors do not cause a retry storm.
+            self._pet_details_fetched = time.monotonic()
+            try:
+                await self.async_refresh_pet_details()
+            except UnauthorizedError as exc:
+                self._notify(exc)
+                return
+            except TractiveError as err:
+                _LOGGER.warning("Failed to refresh pet details: %s", err)
+            except Exception:  # keep the channel alive, retry next interval
+                _LOGGER.exception("Failed to refresh pet details")
+            else:
+                self._notify(None)
 
     def _update_status(self, event: dict[str, Any]) -> None:
         """Update the status from an event."""
@@ -293,8 +316,6 @@ class Tractive:
         """Listen for real-time events from the Tractive API."""
         async with contextlib.aclosing(Channel(self._api).listen()) as events:
             async for event in events:
-                if event.get("message") == "handshake":
-                    continue
                 yield event
 
     async def close(self) -> None:
