@@ -151,9 +151,8 @@ class API:
                 body = await response.json()
                 _LOGGER.debug("Response %s: %s", response.url, body)
                 return body
-            body = await response.read()
-            _LOGGER.debug("Response %s: %d bytes", response.url, len(body))
-            return body
+
+            return await response.read()
 
     async def authenticate(self) -> dict[str, Any] | None:
         """Perform authentication."""
