@@ -60,8 +60,7 @@ class Trackable:
     tracker_id: str
     pet_details: dict[str, Any]
     tracker_details: dict[str, Any]
-    # None: not checked yet; True: the last health overview returned data;
-    # False: the API answered 400/403 (no health features or inactive subscription).
+    # None: unknown, False: API answered 400/403, see TrackableObject.health_overview()
     health_available: bool | None = None
 
     @property

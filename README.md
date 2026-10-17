@@ -81,9 +81,6 @@ obj = client.trackable_object("TRACKABLE_ID")
 await obj.details()  # Includes pet's name, pet's tracker id and so on
 
 # Retrieve health overview (activity, sleep, rest, and health metrics)
-# Returns None when the pet has no health data: the tracker model has no health
-# features (400) or the tracker subscription is inactive (403). An empty dict
-# means health is available but there is no data today.
 await obj.health_overview()
 ```
 
@@ -129,9 +126,11 @@ async with Tractive("email", "password", fetch_delay=2.0) as client:
   It also sets `Trackable.health_available`, so a renewed subscription is picked up on the next
   refresh.
 - `Trackable.health_available` is `None` until checked (no `async_fetch_status()` call has run
-  and no health event arrived), `True` when the last health overview request returned data or a
-  `health_overview` event arrived for the pet, and `False` when the API answered 400 or 403
-  (tracker without health features, or inactive subscription).
+  and no health event arrived), `True` when the last health overview request returned a response
+  (even an empty one) or a `health_overview` event arrived for the pet, and `False` when the API
+  answered 400 or 403 (tracker without health features, or inactive subscription). The flag only
+  changes on `async_fetch_status()` or when a health event arrives; a lapsed subscription is
+  noticed on the next refresh.
 - `async_refresh_pet_details()` re-requests the details of every cached trackable
   (sequentially with `fetch_delay` between pets), updates `Trackable.pet_details` and
   `status.pets[pet_id].weight`, and returns `client.status`. Fetches trackables first if
