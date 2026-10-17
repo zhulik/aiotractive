@@ -11,7 +11,6 @@ from aiotractive.models import TrackerStatus
 from aiotractive.tracker import Tracker
 
 TRACKER_ID = "tracker_abc123"
-TRACKER_DATA = {"_id": TRACKER_ID, "_type": "tracker"}
 
 
 @pytest.fixture
@@ -25,7 +24,7 @@ def mock_api() -> MagicMock:
 @pytest.fixture
 def tracker(mock_api: MagicMock) -> Tracker:
     """Create a Tracker instance with a mocked API."""
-    return Tracker(mock_api, TRACKER_DATA)
+    return Tracker(mock_api, TRACKER_ID)
 
 
 async def test_hw_info_returns_data(tracker: Tracker, mock_api: MagicMock) -> None:
@@ -101,7 +100,7 @@ async def test_set_switch_updates_bound_status(
     """Test that only a pending switch command updates the bound status."""
     status = TrackerStatus()
     setattr(status, field, not active)
-    tracker = Tracker(mock_api, TRACKER_DATA, status)
+    tracker = Tracker(mock_api, TRACKER_ID, status)
     mock_api.request.return_value = response
 
     result = await getattr(tracker, method)(active)

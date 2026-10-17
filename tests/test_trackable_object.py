@@ -34,7 +34,7 @@ def mock_api() -> MagicMock:
 @pytest.fixture
 def pet(mock_api: MagicMock) -> TrackableObject:
     """Create a TrackableObject instance with a mocked API."""
-    return TrackableObject(mock_api, {"_id": PET_ID, "_type": "pet"})
+    return TrackableObject(mock_api, PET_ID)
 
 
 async def test_health_overview_returns_data(

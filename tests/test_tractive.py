@@ -598,57 +598,13 @@ async def test_listen_cancel(client: Tractive) -> None:
     assert asyncio.all_tasks() == {asyncio.current_task()}
 
 
-async def test_start_stop_listener(client: Tractive) -> None:
-    """Test that the listener starts once and stops cleanly."""
-    await client.async_stop_listener()
-
-    with patch("aiotractive.tractive.Channel", mock_channel(wait_forever())):
-        await client.async_start_listener()
-        task = client._background_task
-        await client.async_start_listener()
-        assert client._background_task is task
-        await asyncio.sleep(0)
-
-        await client.async_stop_listener()
-
-    assert client._background_task is None
-    assert task is not None
-    assert task.cancelled()
-
-
-async def test_start_listener_restarts_finished_task(client: Tractive) -> None:
-    """Test that a listener that already ended is replaced by a new one."""
-    channel_cls = mock_channel(
-        events_then_raise([], UnauthorizedError("bye")), wait_forever()
-    )
-
-    with patch("aiotractive.tractive.Channel", channel_cls):
-        await client.async_start_listener()
-        finished = client._background_task
-        assert finished is not None
-        await finished
-
-        await client.async_start_listener()
-        assert client._background_task is not finished
-        await asyncio.sleep(0)
-        await client.async_stop_listener()
-
-    assert channel_cls.call_count == 2
-
-
-async def test_close_stops_listener(client: Tractive) -> None:
-    """Test that close stops a running listener and closes the API."""
+async def test_close_closes_api(client: Tractive) -> None:
+    """Test that leaving the context manager closes the API."""
     client._api.close = AsyncMock()
 
-    with patch("aiotractive.tractive.Channel", mock_channel(wait_forever())):
-        await client.async_start_listener()
-        task = client._background_task
-        await asyncio.sleep(0)
-        await client.close()
+    async with client:
+        pass
 
-    assert client._background_task is None
-    assert task is not None
-    assert task.cancelled()
     client._api.close.assert_awaited_once()
 
 
@@ -738,7 +694,7 @@ async def test_fetch_status(
     client._api.user_id = AsyncMock(return_value="user_1")
     client._api.request = mock_request(
         {
-            "user/user_1/trackable_objects": [{"_id": PET_ID, "_type": "pet"}],
+            "user/user_1/trackable_objects": [{"_id": PET_ID}],
             "trackable_object/pet_id_123": load_fixture("trackable_object"),
             "tracker/device_id_123": load_fixture("tracker_details"),
             "device_hw_report/device_id_123/": load_fixture("tracker_hw_info"),
@@ -773,7 +729,7 @@ async def test_fetch_status(
 def fetch_status_responses() -> dict[str, Any]:
     """Return REST responses for one pet with one tracker."""
     return {
-        "user/user_1/trackable_objects": [{"_id": PET_ID, "_type": "pet"}],
+        "user/user_1/trackable_objects": [{"_id": PET_ID}],
         "trackable_object/pet_id_123": load_fixture("trackable_object"),
         "tracker/device_id_123": load_fixture("tracker_details"),
         "device_hw_report/device_id_123/": load_fixture("tracker_hw_info"),
