@@ -74,6 +74,19 @@ class Trackable:
         return weight
 
 
+def update_tracker_state(status: TrackerStatus, event: dict[str, Any]) -> None:
+    """Apply an explicit tracker state using only this event's reason."""
+    if (state := event.get("tracker_state")) is None:
+        return
+    state = state.lower()
+    if (
+        state == "not_reporting"
+        and event.get("tracker_state_reason") == "SHUTDOWN_BY_USER"
+    ):
+        state = "system_shutdown_user"
+    status.tracker_state = state
+
+
 def update_tracker_hardware(status: TrackerStatus, event: dict[str, Any]) -> None:
     """Apply the hardware block of a tracker event to the status.
 
@@ -85,11 +98,9 @@ def update_tracker_hardware(status: TrackerStatus, event: dict[str, Any]) -> Non
         return
     if "battery_level" in hw:
         status.battery_level = hw["battery_level"]
-    if (tracker_state := event.get("tracker_state")) is not None:
-        status.tracker_state = tracker_state.lower()
     if "charging_state" in event:
         status.battery_charging = event["charging_state"] == "CHARGING"
-    if tracker_state is not None or "tracker_state_reason" in event:
+    if event.get("tracker_state") is not None or "tracker_state_reason" in event:
         status.power_saving = event.get("tracker_state_reason") == "POWER_SAVING"
 
 

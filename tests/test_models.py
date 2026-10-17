@@ -53,7 +53,7 @@ def test_update_tracker_hardware_full_event() -> None:
     update_tracker_hardware(status, FULL_HW_EVENT)
 
     assert status.battery_level == 42
-    assert status.tracker_state == "operational"
+    assert status.tracker_state == "previous"
     assert status.battery_charging is True
     assert status.power_saving is True
 
