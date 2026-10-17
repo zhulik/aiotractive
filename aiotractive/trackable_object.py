@@ -19,15 +19,16 @@ class TrackableObject(DataObject):
         )
         return trackable_object
 
-    async def health_overview(self) -> dict[str, Any]:
+    async def health_overview(self) -> dict[str, Any] | None:
         """Get health overview data including activity, sleep, rest, and health metrics.
 
         Returns health_overview data from the APS API endpoint.
         Replaces the deprecated wellness_overview message.
 
-        Returns an empty dict when the pet has no health overview: the API
-        responds with 400 for pets that do not support it and with 403 when
-        the subscription of the assigned tracker is inactive.
+        Returns None when the pet has no health overview: the API responds
+        with 400 when the tracker model has no health features and with 403
+        when the subscription is inactive. An empty dict from the API still
+        means the overview is available but has nothing for today.
         """
         try:
             health_overview: dict[str, Any] = await self._api.request(
@@ -40,5 +41,5 @@ class TrackableObject(DataObject):
                 self._id,
                 type(error).__name__,
             )
-            return {}
+            return None
         return health_overview

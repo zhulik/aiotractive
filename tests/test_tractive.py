@@ -14,7 +14,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from aiotractive import PetStatus, TrackerStatus, Tractive
-from aiotractive.exceptions import ForbiddenError, TractiveError, UnauthorizedError
+from aiotractive.exceptions import (
+    BadRequestError,
+    ForbiddenError,
+    TractiveError,
+    UnauthorizedError,
+)
 from aiotractive.models import Trackable
 from aiotractive.tractive import PET_DETAILS_REFRESH_INTERVAL
 
@@ -949,17 +954,19 @@ async def test_fetch_trackables_incomplete_tracker(client: Tractive) -> None:
 
 
 @pytest.mark.parametrize(
-    ("health", "expected_pet"),
+    ("health", "expected_pet", "expected_available"),
     [
-        (load_fixture("health_overview"), FULL_PET_STATUS),
-        ({}, PetStatus()),
-        (ForbiddenError(), PetStatus()),
+        (load_fixture("health_overview"), FULL_PET_STATUS, True),
+        ({}, PetStatus(), True),
+        (ForbiddenError(), PetStatus(), False),
+        (BadRequestError(), PetStatus(), False),
     ],
 )
 async def test_fetch_status(
     client: Tractive,
     health: dict[str, Any] | Exception,
     expected_pet: PetStatus,
+    expected_available: bool,
 ) -> None:
     """Test that the REST refresh fills the status and keeps switch states."""
     client._api.user_id = AsyncMock(return_value="user_1")
@@ -995,6 +1002,52 @@ async def test_fetch_status(
         live_tracking=None,
     )
     assert status.pets == {PET_ID: dataclasses.replace(expected_pet, weight=23700)}
+    assert client._trackables is not None
+    assert client._trackables[0].health_available is expected_available
+
+
+async def test_fetch_status_health_becomes_available(client: Tractive) -> None:
+    """Test that the flag flips to True once the health overview is served."""
+    client._api.user_id = AsyncMock(return_value="user_1")
+    responses = fetch_status_responses()
+    responses["pet/pet_id_123/health/overview"] = BadRequestError()
+    client._api.request = mock_request(responses)
+
+    await client.async_fetch_status()
+
+    assert client._trackables is not None
+    assert client._trackables[0].health_available is False
+    assert client.status.pets[PET_ID] == PetStatus(weight=23700)
+
+    responses["pet/pet_id_123/health/overview"] = load_fixture("health_overview")
+
+    await client.async_fetch_status()
+
+    assert client._trackables[0].health_available is True
+    assert client.status.pets[PET_ID] == dataclasses.replace(
+        FULL_PET_STATUS, weight=23700
+    )
+
+
+@pytest.mark.parametrize(
+    ("pet_id", "expected_available"), [(PET_ID, True), ("other_pet", None)]
+)
+async def test_update_status_health_overview_marks_trackable_available(
+    client: Tractive, pet_id: str, expected_available: bool | None
+) -> None:
+    """Test that a health overview event flags only the matching trackable."""
+    client._api.user_id = AsyncMock(return_value="user_1")
+    client._api.request = mock_request(fetch_status_responses())
+    await client.async_fetch_trackables()
+    assert client._trackables is not None
+    assert client._trackables[0].health_available is None
+
+    client._update_status(
+        {"message": "health_overview", "content": {**HEALTH_OVERVIEW, "petId": pet_id}}
+    )
+
+    assert client._trackables[0].health_available is expected_available
+    assert client.status.pets[pet_id].daily_goal == 200
 
 
 def fetch_status_responses() -> dict[str, Any]:
