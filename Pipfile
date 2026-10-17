@@ -10,17 +10,17 @@ yarl=">=1.21.0"
 aiotractive = {editable = true, path = "."}
 
 [dev-packages]
-aiointercept="0.1.12"
+aiointercept="1.0.0"
 build=">=1.2.2"
 prek="0.5.5"
 pytest-asyncio="1.4.0"
 pytest-cov="7.1.0"
 pytest="9.1.1"
-ruff="0.16.10"
+ruff="0.17.0"
 setuptools=">=78.1.1"
 tomli=">=2.1.0"
 twine=">=6.0.0"
-ty="0.0.85"
+ty="0.0.87"
 typing-extensions=">=4.14.0"
 wheel=">=0.36.2"
 
