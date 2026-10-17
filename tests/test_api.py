@@ -10,7 +10,6 @@ import pytest
 from aiohttp.client_exceptions import ClientResponseError
 from aiointercept import aiointercept
 
-from aiotractive import Tractive
 from aiotractive.api import API
 from aiotractive.exceptions import (
     BadRequestError,
@@ -35,9 +34,10 @@ async def test_auth_success(
     async with aiointercept(mock_external_urls=True) as mock:
         mock_auth(mock, auth_response)
 
-        async with Tractive("test@example.com", "password") as client:
-            with caplog.at_level(logging.DEBUG, logger="aiotractive.api"):
-                creds = await client.authenticate()
+        api = API("test@example.com", "password")
+        with caplog.at_level(logging.DEBUG, logger="aiotractive.api"):
+            creds = await api.authenticate()
+        await api.close()
 
     assert creds is not None
 
