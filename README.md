@@ -134,6 +134,11 @@ async with Tractive("email", "password", fetch_delay=2.0) as client:
     tracker_status = status.trackers[trackables[0].tracker_id]
     print(tracker_status.battery_level, tracker_status.latitude)
 
+    # Create health sensors/UI only for pets with health data
+    for trackable in trackables:
+        if trackable.health_available is True:
+            ...
+
     def on_update(error: Exception | None) -> None:
         if error is None:
             print("status changed or channel (re)connected", client.status)
@@ -152,6 +157,14 @@ async with Tractive("email", "password", fetch_delay=2.0) as client:
 - `async_fetch_status()` refreshes every trackable via REST (fetching trackables first if
   needed) and returns `client.status`. Values are merged, so switch states received from events
   are kept.
+  It also sets `Trackable.health_available`, so a renewed subscription is picked up on the next
+  refresh.
+- `Trackable.health_available` is `None` until checked (no `async_fetch_status()` call has run
+  and no health event arrived), `True` when the last health overview request returned a response
+  (even an empty one) or a `health_overview` event arrived for the pet, and `False` when the API
+  answered 400 or 403 (tracker without health features, or inactive subscription). The flag only
+  changes on `async_fetch_status()` or when a health event arrives; a lapsed subscription is
+  noticed on the next refresh.
 - `async_refresh_pet_details()` re-requests the details of every cached trackable
   (sequentially with `fetch_delay` between pets), updates `Trackable.pet_details` and
   `status.pets[pet_id].weight`, and returns `client.status`. Fetches trackables first if
@@ -195,7 +208,7 @@ The library raises the following exceptions:
 
 - `TractiveError` - Base exception class
 - `UnauthorizedError` - When authentication fails or token is invalid
-- `ForbiddenError` - When access to a resource is denied (403), e.g. the health overview of a pet whose tracker subscription is inactive. Authentication and the event channel report 403 as `UnauthorizedError`
+- `ForbiddenError` - When access to a resource is denied (403). Authentication and the event channel report 403 as `UnauthorizedError`
 - `BadRequestError` - When the server rejects the request (400)
 - `NotFoundError` - When the requested resource is not found (404)
 - `DisconnectedError` - When the event channel disconnects
