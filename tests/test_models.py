@@ -15,6 +15,7 @@ from aiotractive.models import (
     update_tracker_from_rest,
     update_tracker_hardware,
     update_tracker_position,
+    update_tracker_state,
     update_tracker_switches,
 )
 
@@ -55,7 +56,7 @@ def test_update_tracker_hardware_full_event() -> None:
     assert status.battery_level == 42
     assert status.tracker_state == "previous"
     assert status.battery_charging is True
-    assert status.power_saving is True
+    assert status.power_saving is False
 
 
 @pytest.mark.parametrize(
@@ -94,14 +95,10 @@ def test_update_tracker_hardware_partial_event(
             {"hardware": {"battery_level": 5}, "charging_state": "NOT_CHARGING"},
             "battery_charging",
         ),
-        (
-            {"hardware": {"battery_level": 5}, "tracker_state_reason": "OTHER"},
-            "power_saving",
-        ),
     ],
 )
 def test_update_tracker_hardware_clears_flag(event: dict[str, Any], field: str) -> None:
-    """Test that a non-matching charging state or reason sets the flag to False."""
+    """Test that a non-matching charging state sets the flag to False."""
     status = _previous()
     setattr(status, field, True)
 
@@ -139,15 +136,72 @@ def test_update_tracker_hardware_without_hardware(event: dict[str, Any]) -> None
         ({"tracker_state": None}, True),
     ],
 )
-def test_update_tracker_hardware_power_saving(
+def test_update_tracker_state_power_saving(
     fields: dict[str, Any], expected: bool
 ) -> None:
     """Test state snapshots clear absent reasons, but partial events preserve them."""
     status = TrackerStatus(tracker_state="operational", power_saving=True)
 
-    update_tracker_hardware(status, {"hardware": {"battery_level": 42}, **fields})
+    update_tracker_state(status, fields)
 
     assert status.power_saving is expected
+
+
+@pytest.mark.parametrize("reason", ["POWER_SAVING", "OTHER", None])
+@pytest.mark.parametrize("power_saving", [True, False])
+def test_update_tracker_hardware_preserves_power_saving(
+    reason: str | None, power_saving: bool
+) -> None:
+    """Hardware updates never overwrite the independently processed state."""
+    status = TrackerStatus(power_saving=power_saving)
+
+    update_tracker_hardware(status, {**FULL_HW_EVENT, "tracker_state_reason": reason})
+
+    assert status.power_saving is power_saving
+
+
+@pytest.mark.parametrize(
+    ("details", "expected"),
+    [
+        (
+            {"state": "NOT_REPORTING", "state_reason": "SHUTDOWN_BY_USER"},
+            "system_shutdown_user",
+        ),
+        (
+            {"state": "not_reporting", "state_reason": "SHUTDOWN_BY_USER"},
+            "system_shutdown_user",
+        ),
+        ({"state": "NOT_REPORTING", "state_reason": "POWER_SAVING"}, "not_reporting"),
+        ({"state": "NOT_REPORTING", "state_reason": None}, "not_reporting"),
+        ({"state": "NOT_REPORTING"}, "not_reporting"),
+        ({"state": "OPERATIONAL", "state_reason": "SHUTDOWN_BY_USER"}, "operational"),
+        ({"state": "SYSTEM_SHUTDOWN_USER"}, "system_shutdown_user"),
+        ({"state_reason": "SHUTDOWN_BY_USER"}, "previous"),
+        ({"state": None, "state_reason": "SHUTDOWN_BY_USER"}, "previous"),
+    ],
+)
+def test_update_tracker_from_rest_state(details: dict[str, Any], expected: str) -> None:
+    """REST uses the same shutdown normalization and missing-state semantics."""
+    status = _previous()
+
+    update_tracker_from_rest(status, details, {}, {})
+
+    assert status.tracker_state == expected
+
+
+def test_update_tracker_from_rest_after_shutdown() -> None:
+    """A REST shutdown reason is not carried into subsequent snapshots."""
+    status = TrackerStatus()
+    update_tracker_from_rest(
+        status, {"state": "NOT_REPORTING", "state_reason": "SHUTDOWN_BY_USER"}, {}, {}
+    )
+    assert status.tracker_state == "system_shutdown_user"
+
+    update_tracker_from_rest(status, {"state": "NOT_REPORTING"}, {}, {})
+    assert status.tracker_state == "not_reporting"
+
+    update_tracker_from_rest(status, {"state": "OPERATIONAL"}, {}, {})
+    assert status.tracker_state == "operational"
 
 
 def test_update_tracker_position_full_event() -> None:

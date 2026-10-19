@@ -74,24 +74,28 @@ class Trackable:
         return weight
 
 
-def update_tracker_state(status: TrackerStatus, event: dict[str, Any]) -> None:
-    """Apply an explicit tracker state using only this event's reason."""
-    if (state := event.get("tracker_state")) is None:
-        return
+def _tracker_state(state: str, reason: str | None) -> str:
+    """Normalize a tracker state using only the accompanying reason."""
     state = state.lower()
-    if (
-        state == "not_reporting"
-        and event.get("tracker_state_reason") == "SHUTDOWN_BY_USER"
-    ):
-        state = "system_shutdown_user"
-    status.tracker_state = state
+    if state == "not_reporting" and reason == "SHUTDOWN_BY_USER":
+        return "system_shutdown_user"
+    return state
+
+
+def update_tracker_state(status: TrackerStatus, event: dict[str, Any]) -> None:
+    """Apply the tracker state and power saving reason of an event."""
+    reason = event.get("tracker_state_reason")
+    if (state := event.get("tracker_state")) is not None:
+        status.tracker_state = _tracker_state(state, reason)
+    # An explicit state without a reason clears power saving.
+    if state is not None or "tracker_state_reason" in event:
+        status.power_saving = reason == "POWER_SAVING"
 
 
 def update_tracker_hardware(status: TrackerStatus, event: dict[str, Any]) -> None:
     """Apply the hardware block of a tracker event to the status.
 
-    Missing fields keep their last known value, except that an explicit tracker
-    state without a reason clears power saving.
+    Missing fields keep their last known value.
     """
     hw = event.get("hardware")
     if not hw:
@@ -100,8 +104,6 @@ def update_tracker_hardware(status: TrackerStatus, event: dict[str, Any]) -> Non
         status.battery_level = hw["battery_level"]
     if "charging_state" in event:
         status.battery_charging = event["charging_state"] == "CHARGING"
-    if event.get("tracker_state") is not None or "tracker_state_reason" in event:
-        status.power_saving = event.get("tracker_state_reason") == "POWER_SAVING"
 
 
 def update_tracker_position(status: TrackerStatus, event: dict[str, Any]) -> None:
@@ -171,7 +173,7 @@ def update_tracker_from_rest(
     if "battery_level" in hw_info:
         status.battery_level = hw_info["battery_level"]
     if (state := details.get("state")) is not None:
-        status.tracker_state = state.lower()
+        status.tracker_state = _tracker_state(state, details.get("state_reason"))
     if "charging_state" in details:
         status.battery_charging = details["charging_state"] == "CHARGING"
     if "state_reason" in details:

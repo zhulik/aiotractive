@@ -372,11 +372,11 @@ async def test_listen_tracker_state_events(
     assert status.battery_level == 80
     assert status.battery_charging is True
     assert (status.latitude, status.longitude) == (1.5, 2.5)
-    assert status.power_saving is True
+    assert status.power_saving is (event.get("tracker_id") == OTHER_TRACKER_ID)
     assert [c.args for c in listener.call_args_list] == [(None,), (None,), (terminal,)]
     if event.get("tracker_id") == OTHER_TRACKER_ID:
         assert client.status.trackers[OTHER_TRACKER_ID] == TrackerStatus(
-            tracker_state="system_shutdown_user"
+            tracker_state="system_shutdown_user", power_saving=False
         )
 
 
@@ -483,7 +483,60 @@ def test_update_status_state_transitions_independent_of_hardware(
         )
         assert status.tracker_state == expected
         assert status.battery_level == (10 if fresh else 80)
-        assert status.power_saving is (not fresh)
+        assert status.power_saving is False
+        assert (status.latitude, status.longitude) == (1.5, 2.5)
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [
+        {},
+        {"hardware": None},
+        {"hardware": {}},
+        {"hardware": {"battery_level": 10}},
+        {"hardware": {"time": None, "battery_level": 10}},
+        {"hardware": {"time": 1, "battery_level": 10}},
+    ],
+)
+def test_update_status_power_saving_without_new_hardware(
+    client: Tractive, fields: dict[str, Any]
+) -> None:
+    """Enter and leave power saving without another hardware sample."""
+    client._update_status(FULL_EVENT)
+    status = client.status.trackers[TRACKER_ID]
+    assert status.power_saving is True
+
+    for event, state, power_saving in [
+        ({"tracker_state": "OPERATIONAL"}, "operational", False),
+        ({"tracker_state_reason": "POWER_SAVING"}, "operational", True),
+        ({}, "operational", True),
+        ({"tracker_state": None}, "operational", True),
+        ({"tracker_state_reason": None}, "operational", False),
+        (
+            {"tracker_state": "NOT_REPORTING", "tracker_state_reason": "POWER_SAVING"},
+            "not_reporting",
+            True,
+        ),
+        ({"tracker_state_reason": "OTHER"}, "not_reporting", False),
+        (
+            {"tracker_state": None, "tracker_state_reason": "POWER_SAVING"},
+            "not_reporting",
+            True,
+        ),
+        (
+            {
+                "tracker_state": "NOT_REPORTING",
+                "tracker_state_reason": "SHUTDOWN_BY_USER",
+            },
+            "system_shutdown_user",
+            False,
+        ),
+    ]:
+        client._update_status({"tracker_id": TRACKER_ID, **fields, **event})
+        assert status.tracker_state == state
+        assert status.power_saving is power_saving
+        assert status.battery_level == 80
+        assert status.battery_charging is True
         assert (status.latitude, status.longitude) == (1.5, 2.5)
 
 
