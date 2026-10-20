@@ -161,47 +161,47 @@ def test_update_tracker_hardware_preserves_power_saving(
 
 
 @pytest.mark.parametrize(
-    ("details", "expected"),
+    "snapshots",
     [
-        (
-            {"state": "NOT_REPORTING", "state_reason": "SHUTDOWN_BY_USER"},
-            "system_shutdown_user",
-        ),
-        (
-            {"state": "not_reporting", "state_reason": "SHUTDOWN_BY_USER"},
-            "system_shutdown_user",
-        ),
-        ({"state": "NOT_REPORTING", "state_reason": "POWER_SAVING"}, "not_reporting"),
-        ({"state": "NOT_REPORTING", "state_reason": None}, "not_reporting"),
-        ({"state": "NOT_REPORTING"}, "not_reporting"),
-        ({"state": "OPERATIONAL", "state_reason": "SHUTDOWN_BY_USER"}, "operational"),
-        ({"state": "SYSTEM_SHUTDOWN_USER"}, "system_shutdown_user"),
-        ({"state_reason": "SHUTDOWN_BY_USER"}, "previous"),
-        ({"state": None, "state_reason": "SHUTDOWN_BY_USER"}, "previous"),
+        [
+            (
+                {"state": "NOT_REPORTING", "state_reason": "SHUTDOWN_BY_USER"},
+                "system_shutdown_user",
+            )
+        ],
+        [
+            (
+                {"state": "not_reporting", "state_reason": "SHUTDOWN_BY_USER"},
+                "system_shutdown_user",
+            )
+        ],
+        [({"state": "NOT_REPORTING", "state_reason": "POWER_SAVING"}, "not_reporting")],
+        [({"state": "NOT_REPORTING", "state_reason": None}, "not_reporting")],
+        [({"state": "NOT_REPORTING"}, "not_reporting")],
+        [({"state": "OPERATIONAL", "state_reason": "SHUTDOWN_BY_USER"}, "operational")],
+        [({"state": "SYSTEM_SHUTDOWN_USER"}, "system_shutdown_user")],
+        [({"state_reason": "SHUTDOWN_BY_USER"}, "previous")],
+        [({"state": None, "state_reason": "SHUTDOWN_BY_USER"}, "previous")],
+        [
+            (
+                {"state": "NOT_REPORTING", "state_reason": "SHUTDOWN_BY_USER"},
+                "system_shutdown_user",
+            ),
+            ({"state": "NOT_REPORTING"}, "not_reporting"),
+            ({"state": "OPERATIONAL"}, "operational"),
+        ],
     ],
 )
-def test_update_tracker_from_rest_state(details: dict[str, Any], expected: str) -> None:
-    """REST uses the same shutdown normalization and missing-state semantics."""
+def test_update_tracker_from_rest_state(
+    snapshots: list[tuple[dict[str, Any], str]],
+) -> None:
+    """Normalize REST states without carrying shutdown reasons across snapshots."""
     status = _previous()
 
-    update_tracker_from_rest(status, details, {}, {})
+    for details, expected in snapshots:
+        update_tracker_from_rest(status, details, {}, {})
 
-    assert status.tracker_state == expected
-
-
-def test_update_tracker_from_rest_after_shutdown() -> None:
-    """A REST shutdown reason is not carried into subsequent snapshots."""
-    status = TrackerStatus()
-    update_tracker_from_rest(
-        status, {"state": "NOT_REPORTING", "state_reason": "SHUTDOWN_BY_USER"}, {}, {}
-    )
-    assert status.tracker_state == "system_shutdown_user"
-
-    update_tracker_from_rest(status, {"state": "NOT_REPORTING"}, {}, {})
-    assert status.tracker_state == "not_reporting"
-
-    update_tracker_from_rest(status, {"state": "OPERATIONAL"}, {}, {})
-    assert status.tracker_state == "operational"
+        assert status.tracker_state == expected
 
 
 def test_update_tracker_position_full_event() -> None:

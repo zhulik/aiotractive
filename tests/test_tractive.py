@@ -277,17 +277,17 @@ def test_update_status_dedup_same_tracker(client: Tractive) -> None:
 
 
 @pytest.mark.parametrize(
-    ("event", "expected"),
+    ("event", "expected", "expected_power_saving"),
     [
-        pytest.param(
+        (
             {
                 "tracker_state": "NOT_REPORTING",
                 "tracker_state_reason": "SHUTDOWN_BY_USER",
             },
             "system_shutdown_user",
-            id="shutdown-without-hardware",
+            False,
         ),
-        pytest.param(
+        (
             {
                 "tracker_state": "NOT_REPORTING",
                 "tracker_state_reason": "SHUTDOWN_BY_USER",
@@ -296,59 +296,47 @@ def test_update_status_dedup_same_tracker(client: Tractive) -> None:
                 "position": {"time": 1, "latlong": [7, 8]},
             },
             "system_shutdown_user",
-            id="shutdown-with-unchanged-hardware-time",
+            False,
         ),
-        pytest.param(
-            {"tracker_state": "NOT_REPORTING"},
-            "not_reporting",
-            id="not-reporting-without-reason",
-        ),
-        pytest.param(
+        ({"tracker_state": "NOT_REPORTING"}, "not_reporting", False),
+        (
             {"tracker_state": "NOT_REPORTING", "tracker_state_reason": "NO_SIGNAL"},
             "not_reporting",
-            id="not-reporting-for-another-reason",
+            False,
         ),
-        pytest.param(
+        (
             {
                 "tracker_state": "OPERATIONAL",
                 "tracker_state_reason": "SHUTDOWN_BY_USER",
             },
             "operational",
-            id="operational-with-inconsistent-reason",
+            False,
         ),
-        pytest.param(
-            {"tracker_state": "SYSTEM_SHUTDOWN_USER"},
-            "system_shutdown_user",
-            id="legacy-shutdown-state",
-        ),
-        pytest.param(
-            {"tracker_state_reason": "SHUTDOWN_BY_USER"},
-            "operational",
-            id="reason-without-state-is-not-shutdown",
-        ),
-        pytest.param(
+        ({"tracker_state": "SYSTEM_SHUTDOWN_USER"}, "system_shutdown_user", False),
+        ({"tracker_state_reason": "SHUTDOWN_BY_USER"}, "operational", False),
+        (
             {
                 "tracker_id": OTHER_TRACKER_ID,
                 "tracker_state": "NOT_REPORTING",
                 "tracker_state_reason": "SHUTDOWN_BY_USER",
             },
             "operational",
-            id="another-tracker-does-not-change-state",
+            True,
         ),
-        pytest.param(
+        (
             {"tracker_state": None, "tracker_state_reason": "SHUTDOWN_BY_USER"},
             "operational",
-            id="null-state-is-not-shutdown",
+            False,
         ),
-        pytest.param(
+        (
             {"tracker_state": "NOT_REPORTING", "tracker_state_reason": None},
             "not_reporting",
-            id="null-reason-is-not-shutdown",
+            False,
         ),
     ],
 )
 async def test_listen_tracker_state_events(
-    client: Tractive, event: dict[str, Any], expected: str
+    client: Tractive, event: dict[str, Any], expected: str, expected_power_saving: bool
 ) -> None:
     """Apply raw state events and notify without repeating hardware/GPS samples."""
     listener = MagicMock()
@@ -372,7 +360,7 @@ async def test_listen_tracker_state_events(
     assert status.battery_level == 80
     assert status.battery_charging is True
     assert (status.latitude, status.longitude) == (1.5, 2.5)
-    assert status.power_saving is (event.get("tracker_id") == OTHER_TRACKER_ID)
+    assert status.power_saving is expected_power_saving
     assert [c.args for c in listener.call_args_list] == [(None,), (None,), (terminal,)]
     if event.get("tracker_id") == OTHER_TRACKER_ID:
         assert client.status.trackers[OTHER_TRACKER_ID] == TrackerStatus(
@@ -383,38 +371,20 @@ async def test_listen_tracker_state_events(
 @pytest.mark.parametrize(
     ("event", "expected"),
     [
-        pytest.param({"tracker_state": "OPERATIONAL"}, "operational", id="powered-on"),
-        pytest.param(
-            {"tracker_state": "NOT_REPORTING"},
-            "not_reporting",
-            id="shutdown-reason-not-reused",
-        ),
-        pytest.param(
-            {"tracker_state_reason": "SHUTDOWN_BY_USER"},
-            "system_shutdown_user",
-            id="reason-only-does-not-change-state",
-        ),
-        pytest.param(
-            {"hardware": {"time": 1, "battery_level": 10}},
-            "system_shutdown_user",
-            id="hardware-only-does-not-change-state",
-        ),
-        pytest.param({}, "system_shutdown_user", id="missing-state"),
-        pytest.param({"tracker_state": None}, "system_shutdown_user", id="null-state"),
-        pytest.param(
-            {"tracker_state": None, "tracker_state_reason": None},
-            "system_shutdown_user",
-            id="null-state-and-reason",
-        ),
-        pytest.param(
+        ({"tracker_state": "OPERATIONAL"}, "operational"),
+        ({"tracker_state": "NOT_REPORTING"}, "not_reporting"),
+        ({"tracker_state_reason": "SHUTDOWN_BY_USER"}, "system_shutdown_user"),
+        ({"hardware": {"time": 1, "battery_level": 10}}, "system_shutdown_user"),
+        ({}, "system_shutdown_user"),
+        ({"tracker_state": None}, "system_shutdown_user"),
+        ({"tracker_state": None, "tracker_state_reason": None}, "system_shutdown_user"),
+        (
             {"tracker_state": "NOT_REPORTING", "tracker_state_reason": None},
             "not_reporting",
-            id="null-reason-not-reused",
         ),
-        pytest.param(
+        (
             {"hardware": {"time": 2, "battery_level": 80}, "tracker_state": None},
             "system_shutdown_user",
-            id="fresh-hardware-with-null-state",
         ),
     ],
 )
@@ -445,19 +415,13 @@ def test_update_status_after_shutdown(
 @pytest.mark.parametrize(
     ("fields", "fresh"),
     [
-        pytest.param({}, False, id="missing-hardware"),
-        pytest.param({"hardware": None}, False, id="null-hardware"),
-        pytest.param({"hardware": {}}, False, id="empty-hardware"),
-        pytest.param({"hardware": {"battery_level": 10}}, False, id="missing-time"),
-        pytest.param(
-            {"hardware": {"time": None, "battery_level": 10}}, False, id="null-time"
-        ),
-        pytest.param(
-            {"hardware": {"time": 1, "battery_level": 10}}, False, id="unchanged-time"
-        ),
-        pytest.param(
-            {"hardware": {"time": 2, "battery_level": 10}}, True, id="new-time"
-        ),
+        ({}, False),
+        ({"hardware": None}, False),
+        ({"hardware": {}}, False),
+        ({"hardware": {"battery_level": 10}}, False),
+        ({"hardware": {"time": None, "battery_level": 10}}, False),
+        ({"hardware": {"time": 1, "battery_level": 10}}, False),
+        ({"hardware": {"time": 2, "battery_level": 10}}, True),
     ],
 )
 def test_update_status_state_transitions_independent_of_hardware(
