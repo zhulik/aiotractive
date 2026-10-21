@@ -277,6 +277,259 @@ def test_update_status_dedup_same_tracker(client: Tractive) -> None:
 
 
 @pytest.mark.parametrize(
+    ("event", "expected", "expected_power_saving"),
+    [
+        (
+            {
+                "tracker_state": "NOT_REPORTING",
+                "tracker_state_reason": "SHUTDOWN_BY_USER",
+            },
+            "system_shutdown_user",
+            False,
+        ),
+        (
+            {
+                "tracker_state": "NOT_REPORTING",
+                "tracker_state_reason": "SHUTDOWN_BY_USER",
+                "hardware": {"time": 1, "battery_level": 10},
+                "charging_state": "NOT_CHARGING",
+                "position": {"time": 1, "latlong": [7, 8]},
+            },
+            "system_shutdown_user",
+            False,
+        ),
+        ({"tracker_state": "NOT_REPORTING"}, "not_reporting", False),
+        (
+            {"tracker_state": "NOT_REPORTING", "tracker_state_reason": "NO_SIGNAL"},
+            "not_reporting",
+            False,
+        ),
+        (
+            {
+                "tracker_state": "OPERATIONAL",
+                "tracker_state_reason": "SHUTDOWN_BY_USER",
+            },
+            "operational",
+            False,
+        ),
+        ({"tracker_state": "SYSTEM_SHUTDOWN_USER"}, "system_shutdown_user", False),
+        ({"tracker_state_reason": "SHUTDOWN_BY_USER"}, "operational", False),
+        (
+            {
+                "tracker_id": OTHER_TRACKER_ID,
+                "tracker_state": "NOT_REPORTING",
+                "tracker_state_reason": "SHUTDOWN_BY_USER",
+            },
+            "operational",
+            True,
+        ),
+        (
+            {"tracker_state": None, "tracker_state_reason": "SHUTDOWN_BY_USER"},
+            "operational",
+            False,
+        ),
+        (
+            {"tracker_state": "NOT_REPORTING", "tracker_state_reason": None},
+            "not_reporting",
+            False,
+        ),
+    ],
+)
+async def test_listen_tracker_state_events(
+    client: Tractive, event: dict[str, Any], expected: str, expected_power_saving: bool
+) -> None:
+    """Apply raw state events and notify without repeating hardware/GPS samples."""
+    listener = MagicMock()
+    client.subscribe_updates(listener)
+    terminal = UnauthorizedError("bye")
+    channel_cls = mock_channel(
+        events_then_raise(
+            [
+                {**FULL_EVENT, "tracker_state": "OPERATIONAL"},
+                {"message": "tracker_status", "tracker_id": TRACKER_ID, **event},
+            ],
+            terminal,
+        )
+    )
+
+    with patch("aiotractive.tractive.Channel", channel_cls):
+        await client.listen()
+
+    status = client.status.trackers[TRACKER_ID]
+    assert status.tracker_state == expected
+    assert status.battery_level == 80
+    assert status.battery_charging is True
+    assert (status.latitude, status.longitude) == (1.5, 2.5)
+    assert status.power_saving is expected_power_saving
+    assert [c.args for c in listener.call_args_list] == [(None,), (None,), (terminal,)]
+    if event.get("tracker_id") == OTHER_TRACKER_ID:
+        assert client.status.trackers[OTHER_TRACKER_ID] == TrackerStatus(
+            tracker_state="system_shutdown_user", power_saving=False
+        )
+
+
+@pytest.mark.parametrize(
+    ("event", "expected"),
+    [
+        ({"tracker_state": "OPERATIONAL"}, "operational"),
+        ({"tracker_state": "NOT_REPORTING"}, "not_reporting"),
+        ({"tracker_state_reason": "SHUTDOWN_BY_USER"}, "system_shutdown_user"),
+        ({"hardware": {"time": 1, "battery_level": 10}}, "system_shutdown_user"),
+        ({}, "system_shutdown_user"),
+        ({"tracker_state": None}, "system_shutdown_user"),
+        ({"tracker_state": None, "tracker_state_reason": None}, "system_shutdown_user"),
+        (
+            {"tracker_state": "NOT_REPORTING", "tracker_state_reason": None},
+            "not_reporting",
+        ),
+        (
+            {"hardware": {"time": 2, "battery_level": 80}, "tracker_state": None},
+            "system_shutdown_user",
+        ),
+    ],
+)
+def test_update_status_after_shutdown(
+    client: Tractive, event: dict[str, Any], expected: str
+) -> None:
+    """Preserve missing/null states and use only the current event's reason."""
+    client._update_status(FULL_EVENT)
+    client._update_status(
+        {
+            "tracker_id": TRACKER_ID,
+            "tracker_state": "NOT_REPORTING",
+            "tracker_state_reason": "SHUTDOWN_BY_USER",
+        }
+    )
+    status = client.status.trackers[TRACKER_ID]
+    assert status.tracker_state == "system_shutdown_user"
+
+    client._update_status(
+        {"message": "tracker_status", "tracker_id": TRACKER_ID, **event}
+    )
+
+    assert status.tracker_state == expected
+    assert status.battery_level == 80
+    assert (status.latitude, status.longitude) == (1.5, 2.5)
+
+
+@pytest.mark.parametrize(
+    ("fields", "fresh"),
+    [
+        ({}, False),
+        ({"hardware": None}, False),
+        ({"hardware": {}}, False),
+        ({"hardware": {"battery_level": 10}}, False),
+        ({"hardware": {"time": None, "battery_level": 10}}, False),
+        ({"hardware": {"time": 1, "battery_level": 10}}, False),
+        ({"hardware": {"time": 2, "battery_level": 10}}, True),
+    ],
+)
+def test_update_status_state_transitions_independent_of_hardware(
+    client: Tractive, fields: dict[str, Any], fresh: bool
+) -> None:
+    """Normalize shutdown and apply subsequent states regardless of hardware time."""
+    client._update_status({**FULL_EVENT, "tracker_state": "OPERATIONAL"})
+    status = client.status.trackers[TRACKER_ID]
+
+    for state, reason, expected in [
+        ("NOT_REPORTING", "SHUTDOWN_BY_USER", "system_shutdown_user"),
+        ("OPERATIONAL", "SHUTDOWN_BY_USER", "operational"),
+        ("NOT_REPORTING", "NO_SIGNAL", "not_reporting"),
+        ("OPERATIONAL", None, "operational"),
+    ]:
+        client._update_status(
+            {
+                "tracker_id": TRACKER_ID,
+                "tracker_state": state,
+                "tracker_state_reason": reason,
+                **fields,
+            }
+        )
+        assert status.tracker_state == expected
+        assert status.battery_level == (10 if fresh else 80)
+        assert status.power_saving is False
+        assert (status.latitude, status.longitude) == (1.5, 2.5)
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [
+        {},
+        {"hardware": None},
+        {"hardware": {}},
+        {"hardware": {"battery_level": 10}},
+        {"hardware": {"time": None, "battery_level": 10}},
+        {"hardware": {"time": 1, "battery_level": 10}},
+    ],
+)
+def test_update_status_power_saving_without_new_hardware(
+    client: Tractive, fields: dict[str, Any]
+) -> None:
+    """Enter and leave power saving without another hardware sample."""
+    client._update_status(FULL_EVENT)
+    status = client.status.trackers[TRACKER_ID]
+    assert status.power_saving is True
+
+    for event, state, power_saving in [
+        ({"tracker_state": "OPERATIONAL"}, "operational", False),
+        ({"tracker_state_reason": "POWER_SAVING"}, "operational", True),
+        ({}, "operational", True),
+        ({"tracker_state": None}, "operational", True),
+        ({"tracker_state_reason": None}, "operational", False),
+        (
+            {"tracker_state": "NOT_REPORTING", "tracker_state_reason": "POWER_SAVING"},
+            "not_reporting",
+            True,
+        ),
+        ({"tracker_state_reason": "OTHER"}, "not_reporting", False),
+        (
+            {"tracker_state": None, "tracker_state_reason": "POWER_SAVING"},
+            "not_reporting",
+            True,
+        ),
+        (
+            {
+                "tracker_state": "NOT_REPORTING",
+                "tracker_state_reason": "SHUTDOWN_BY_USER",
+            },
+            "system_shutdown_user",
+            False,
+        ),
+    ]:
+        client._update_status({"tracker_id": TRACKER_ID, **fields, **event})
+        assert status.tracker_state == state
+        assert status.power_saving is power_saving
+        assert status.battery_level == 80
+        assert status.battery_charging is True
+        assert (status.latitude, status.longitude) == (1.5, 2.5)
+
+
+def test_update_status_state_transitions_per_tracker(client: Tractive) -> None:
+    """Keep states and hardware deduplication independent for interleaved trackers."""
+    for tracker_id in (TRACKER_ID, OTHER_TRACKER_ID):
+        client._update_status(
+            {**FULL_EVENT, "tracker_id": tracker_id, "tracker_state": "OPERATIONAL"}
+        )
+    for tracker_id in (TRACKER_ID, OTHER_TRACKER_ID):
+        client._update_status(
+            {
+                "tracker_id": tracker_id,
+                "tracker_state": "NOT_REPORTING",
+                "tracker_state_reason": "SHUTDOWN_BY_USER",
+                "hardware": {"time": 1, "battery_level": 10},
+            }
+        )
+    client._update_status({"tracker_id": TRACKER_ID, "tracker_state": "OPERATIONAL"})
+
+    assert client.status.trackers[TRACKER_ID].tracker_state == "operational"
+    assert (
+        client.status.trackers[OTHER_TRACKER_ID].tracker_state == "system_shutdown_user"
+    )
+    assert client.status.trackers[TRACKER_ID].battery_level == 80
+    assert client.status.trackers[OTHER_TRACKER_ID].battery_level == 80
+
+
+@pytest.mark.parametrize(
     ("event", "expected"),
     [
         ({"message": "health_overview", **HEALTH_OVERVIEW}, FULL_PET_STATUS),
@@ -414,13 +667,24 @@ async def test_listen_listener_error_is_logged(
 @pytest.mark.usefixtures("idle_refresh")
 async def test_listen_reconnects_after_error(client: Tractive) -> None:
     """Test that a transient error is reported, dedup reset and reconnected."""
-    listener = MagicMock()
+    states: list[str | None] = []
+    listener = MagicMock(
+        side_effect=lambda _: states.append(
+            client.status.trackers[TRACKER_ID].tracker_state
+        )
+    )
     client.subscribe_updates(listener)
     transient = TractiveError("boom")
     terminal = UnauthorizedError("bye")
-    second = {**FULL_EVENT, "hardware": {"time": 1, "battery_level": 30}}
+    first = {**FULL_EVENT, "tracker_state_reason": "SHUTDOWN_BY_USER"}
+    second = {
+        **FULL_EVENT,
+        "tracker_state": "OPERATIONAL",
+        "hardware": {"time": 1, "battery_level": 30},
+        "position": {"time": 1, "latlong": [7, 8]},
+    }
     channel_cls = mock_channel(
-        events_then_raise([FULL_EVENT], transient),
+        events_then_raise([first], transient),
         events_then_raise([second], terminal),
     )
 
@@ -439,6 +703,13 @@ async def test_listen_reconnects_after_error(client: Tractive) -> None:
         (terminal,),
     ]
     assert client.status.trackers[TRACKER_ID].battery_level == 30
+    assert client.status.trackers[TRACKER_ID].latitude == 7
+    assert states == [
+        "system_shutdown_user",
+        "system_shutdown_user",
+        "operational",
+        "operational",
+    ]
 
 
 @pytest.mark.usefixtures("idle_refresh")
