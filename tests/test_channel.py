@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-from asyncio.exceptions import TimeoutError as AIOTimeoutError
 from http import HTTPStatus
 from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, call
@@ -184,7 +183,7 @@ async def test_listen_handshake(channel: Channel, mock_api: MagicMock) -> None:
 
 
 async def test_listen_timeout(channel: Channel, mock_api: MagicMock) -> None:
-    """Test that _listen continues loop on AIOTimeoutError."""
+    """Test that _listen continues loop on TimeoutError."""
     call_count = 0
     mock_api.retry_delay.return_value = 0
 
@@ -192,7 +191,7 @@ async def test_listen_timeout(channel: Channel, mock_api: MagicMock) -> None:
         nonlocal call_count
         call_count += 1
         if call_count == 1:
-            raise AIOTimeoutError
+            raise TimeoutError
         mock_context = AsyncMock()
         mock_context.__aenter__.return_value = create_mock_response(
             [b'{"message": "tracker_status"}']

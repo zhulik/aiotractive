@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import time
-from asyncio.exceptions import TimeoutError as AIOTimeoutError
 from collections.abc import AsyncGenerator, Callable
 from http import HTTPStatus
 from typing import TYPE_CHECKING, Any
@@ -112,7 +111,7 @@ class Channel:
                         if event["message"] in self.IGNORE_MESSAGES:
                             continue
                         await self._queue.put({"type": "event", "event": event})
-            except AIOTimeoutError:
+            except TimeoutError:
                 continue
             except (
                 aiohttp.ClientPayloadError,
