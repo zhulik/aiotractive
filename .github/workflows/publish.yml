@@ -12,22 +12,13 @@ jobs:
       - name: Checking out code from GitHub
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
-      - name: Set up Python 3.14
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+      - name: Set up uv and Python 3.14
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e  # v10.3.2
         with:
           python-version: '3.14'
 
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-
       - name: Install dependencies
-        run: |
-          pip install pipenv
-          pipenv sync --dev
+        run: uv sync --locked
 
       - name: Set package version
         run: |
@@ -36,7 +27,7 @@ jobs:
           sed -i "s/^version = \".*\"$/version = \"${version}\"/" pyproject.toml
 
       - name: Build the package
-        run: pipenv run make dist
+        run: uv run --no-sync make dist
 
       - name: Publish the package
         uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33  # v1.14.2

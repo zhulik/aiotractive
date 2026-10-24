@@ -206,12 +206,11 @@ This library is fully typed and includes a `py.typed` marker for [PEP 561](https
 
 ## Creating a development environment
 
+Requires [uv](https://docs.astral.sh/uv/getting-started/installation/).
+
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install pipenv
-pipenv install --dev
-prek install
+uv sync
+uv run prek install
 ```
 
 ## Contribution
