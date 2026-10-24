@@ -2,7 +2,7 @@ version: 2
 enable-beta-ecosystems: true
 
 updates:
-  - package-ecosystem: "pip"
+  - package-ecosystem: "uv"
     directory: "/"
     schedule:
       interval: "weekly"
@@ -16,11 +16,7 @@ updates:
           - "ruff"
           - "ty"
     ignore:
-      - dependency-name: "setuptools"
-      - dependency-name: "tomli"
       - dependency-name: "twine"
-      - dependency-name: "typing-extensions"
-      - dependency-name: "wheel"
       - dependency-name: "aiohttp"
       - dependency-name: "orjson"
       - dependency-name: "yarl"

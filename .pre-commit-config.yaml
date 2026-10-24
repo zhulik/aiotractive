@@ -37,4 +37,3 @@ repos:
         args:
           - --no-sort-keys
           - --autofix
-        exclude: "Pipfile.lock"

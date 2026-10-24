@@ -26,6 +26,18 @@ classifiers = [
 dependencies = ["aiohttp>=3.14.5", "orjson>=3.13.0", "yarl>=1.21.0"]
 urls = { Homepage = "https://github.com/zhulik/aiotractive" }
 
+[dependency-groups]
+dev = [
+    "aiointercept==1.0.0",
+    "prek==0.5.5",
+    "pytest==9.1.1",
+    "pytest-asyncio==1.4.0",
+    "pytest-cov==7.1.0",
+    "ruff==0.17.0",
+    "twine>=6.0.0",
+    "ty==0.0.87",
+]
+
 [tool.setuptools.packages.find]
 include = ["aiotractive*"]
 

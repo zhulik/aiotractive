@@ -14,36 +14,30 @@ jobs:
       matrix:
         python-version:
           - "3.11"
+          - "3.12"
+          - "3.13"
           - "3.14"
           - "3.15"
     steps:
       - name: Checking out code from GitHub
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+      - name: Set up uv and Python ${{ matrix.python-version }}
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e  # v10.3.2
         with:
           python-version: ${{ matrix.python-version }}
-
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
-        with:
-          path: ~/.cache/pip
-          key: pip-${{ hashFiles('**/Pipfile.lock') }}-${{ matrix.python-version }}
-          restore-keys: |
-            pip-
+          enable-cache: true
 
       - name: Install dependencies
-        run: |
-          pip install pipenv
-          pipenv sync --dev
+        run: uv sync --locked
 
       - name: Run linters
-        run: pipenv run make lint
+        run: uv run make lint
 
       - name: Run prek
-        if: ${{ matrix.python-version }} == "3.14"
+        if: matrix.python-version == '3.11'
         run: |
-          pipenv run prek run \
+          uv run prek run \
             end-of-file-fixer \
             trailing-whitespace \
             check-yaml \
@@ -53,7 +47,7 @@ jobs:
             --all-files
 
       - name: Run tests
-        run: pipenv run make test
+        run: uv run make test
 
   test:
     runs-on: ubuntu-latest
