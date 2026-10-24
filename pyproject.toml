@@ -21,9 +21,10 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3.15",
     "Typing :: Typed",
 ]
-dependencies = ["aiohttp>=3.13.0", "orjson>=3.11.6", "yarl>=1.21.0"]
+dependencies = ["aiohttp>=3.14.5", "orjson>=3.13.0", "yarl>=1.21.0"]
 urls = { Homepage = "https://github.com/zhulik/aiotractive" }
 
 [tool.setuptools.packages.find]
@@ -69,4 +70,4 @@ module = "tests.*"
 disallow_untyped_decorators = false
 
 [tool.ty.environment]
-python-version = "3.14"
+python-version = "3.10"
