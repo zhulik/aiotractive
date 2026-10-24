@@ -6,7 +6,7 @@ import asyncio
 import contextlib
 import logging
 import time
-from collections.abc import AsyncIterator, Callable
+from collections.abc import Callable
 from functools import partial
 from types import TracebackType
 from typing import Any, Self
@@ -62,7 +62,6 @@ class Tractive:
         self._last_hw_time: dict[str, float] = {}
         self._last_pos_time: dict[str, float] = {}
         self._update_listener: Callable[[Exception | None], None] | None = None
-        self._background_task: asyncio.Task[None] | None = None
 
     def subscribe_updates(
         self, update_listener: Callable[[Exception | None], None]
@@ -78,21 +77,6 @@ class Tractive:
             self._update_listener(exc)
         except Exception:  # a listener bug must not stop the loop
             _LOGGER.exception("Error in update listener")
-
-    async def async_start_listener(self) -> None:
-        """Start the background listener for real-time events."""
-        if self._background_task is not None and not self._background_task.done():
-            return
-        self._background_task = asyncio.create_task(self.listen())
-
-    async def async_stop_listener(self) -> None:
-        """Stop the background listener."""
-        if self._background_task is None:
-            return
-        self._background_task.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await self._background_task
-        self._background_task = None
 
     async def listen(self) -> None:
         """Consume real-time events and keep ``status`` up to date."""
@@ -284,52 +268,27 @@ class Tractive:
         self._pet_details_fetched = time.monotonic()
         return self.status
 
-    async def authenticate(self) -> dict[str, Any] | None:
-        """Authenticate the client."""
-        return await self._api.authenticate()
-
-    async def trackers(self) -> list[Tracker]:
-        """Get all trackers for the authenticated user."""
-        trackers: list[dict[str, Any]] = await self._api.request(
-            f"user/{await self._api.user_id()}/trackers"
-        )
-        return [
-            Tracker(
-                self._api,
-                t,
-                status=self.status.trackers.setdefault(t["_id"], TrackerStatus()),
-            )
-            for t in trackers
-        ]
-
     def tracker(self, tracker_id: str) -> Tracker:
         """Get tracker by ID."""
         return Tracker(
             self._api,
-            {"_id": tracker_id, "_type": "tracker"},
+            tracker_id,
             status=self.status.trackers.setdefault(tracker_id, TrackerStatus()),
         )
 
     def trackable_object(self, trackable_id: str) -> TrackableObject:
         """Get trackable object by ID."""
-        return TrackableObject(self._api, {"_id": trackable_id, "_type": "pet"})
+        return TrackableObject(self._api, trackable_id)
 
     async def trackable_objects(self) -> list[TrackableObject]:
         """Get all trackable objects for the authenticated user."""
         trackable_objects: list[dict[str, Any]] = await self._api.request(
             f"user/{await self._api.user_id()}/trackable_objects"
         )
-        return [TrackableObject(self._api, t) for t in trackable_objects]
-
-    async def events(self) -> AsyncIterator[dict[str, Any]]:
-        """Listen for real-time events from the Tractive API."""
-        async with contextlib.aclosing(Channel(self._api).listen()) as events:
-            async for event in events:
-                yield event
+        return [TrackableObject(self._api, t["_id"]) for t in trackable_objects]
 
     async def close(self) -> None:
         """Close open client session."""
-        await self.async_stop_listener()
         await self._api.close()
 
     async def __aenter__(self) -> Self:

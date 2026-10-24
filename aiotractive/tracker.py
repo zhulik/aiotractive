@@ -18,10 +18,10 @@ class Tracker(DataObject):
     ACTIONS: ClassVar[dict[bool, str]] = {True: "on", False: "off"}
 
     def __init__(
-        self, api: API, data: dict[str, Any], status: TrackerStatus | None = None
+        self, api: API, tracker_id: str, status: TrackerStatus | None = None
     ) -> None:
         """Initialize the tracker, optionally bound to a live status."""
-        super().__init__(api, data)
+        super().__init__(api, tracker_id)
         self._status = status
 
     async def details(self) -> dict[str, Any]:
@@ -42,19 +42,6 @@ class Tracker(DataObject):
             f"device_pos_report/{self._id}"
         )
         return pos_report or {}
-
-    async def positions(
-        self, time_from: float, time_to: float, fmt: str
-    ) -> dict[str, Any]:
-        """Get positions for the tracker within a time range."""
-        url = f"tracker/{self._id}/positions"
-        params = {
-            "time_from": time_from,
-            "time_to": time_to,
-            "format": fmt,
-        }
-        positions: dict[str, Any] = await self._api.request(url, params=params)
-        return positions
 
     async def _set_switch(self, command: str, active: bool) -> dict[str, Any]:
         result: dict[str, Any] = await self._api.request(

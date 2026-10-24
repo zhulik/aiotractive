@@ -43,7 +43,6 @@ class API:
         password: str,
         client_id: str = CLIENT_ID,
         timeout: int = DEFAULT_TIMEOUT,
-        loop: asyncio.AbstractEventLoop | None = None,
         session: aiohttp.ClientSession | None = None,
         retry_count: int = 3,
         retry_delay: Callable[[int], float] = lambda attempt: min(
@@ -61,8 +60,7 @@ class API:
         self._close_session: bool = False
 
         if self.session is None:
-            loop = loop or asyncio.get_event_loop()
-            self.session = aiohttp.ClientSession(loop=loop)
+            self.session = aiohttp.ClientSession()
             self._close_session = True
 
         self._user_credentials: dict[str, Any] | None = None

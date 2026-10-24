@@ -45,22 +45,9 @@ if __name__ == "__main__":
 
 Tractive is the entrypoint class, it acts as an async context manager and provides access to API endpoints.
 
-#### Authentication
-
-```python
-client.authenticate()
-
-# {'user_id': 'user_id', 'client_id': 'client_id', 'expires_at': 1626821491, 'access_token': 'long access token'}
-```
-
 #### Trackers
 
 ```python
-trackers = await client.trackers()
-tracker = trackers[0]
-
-# Or
-
 tracker = client.tracker("TRACKER_ID")
 
 # Retrieve details
@@ -71,13 +58,6 @@ await tracker.hw_info()  # Includes battery level, firmware version, model and s
 
 # Retrieve current location
 await tracker.pos_report()  # Includes coordinates, latitude, speed and so on
-
-# Retrieve history positions
-now = datetime.timestamp(datetime.now())
-time_from = now - 3600 * LAST_HOURS
-time_to = now
-fmt = "json_segments"
-await tracker.positions(time_from, time_to, fmt)
 
 # Control the buzzer
 await tracker.set_buzzer_active(True)  # or False
@@ -103,20 +83,6 @@ await obj.details()  # Includes pet's name, pet's tracker id and so on
 # Retrieve health overview (activity, sleep, rest, and health metrics)
 await obj.health_overview()
 ```
-
-#### Events
-
-```python
-async for event in client.events():
-    pp(event)
-```
-
-After connecting you will immediately receive one `tracker_status` event per owned tracker.
-The first event always includes full current status of the tracker including current position, battery level, states of the buzzer,
-the LED and the live tracking.
-
-All following events will have the same name, but only include one of these: either a position, battery info, or a buzzer/LED/live
-status.
 
 #### Status and push updates
 
@@ -177,15 +143,13 @@ async with Tractive("email", "password", fetch_delay=2.0) as client:
   whichever is later. The update listener is called with `None` after a successful refresh. A
   `TractiveError` during refresh is logged as a warning, previous values are kept, the cached
   trackables are dropped so the next refresh fetches them again, and the attempt counts toward
-  the interval; `UnauthorizedError` stops listening. Run it as a task and cancel it to stop, or
-  use `await client.async_start_listener()` / `await client.async_stop_listener()`, which do
-  that for you (`close()` stops it too).
+  the interval; `UnauthorizedError` stops listening. Run it as a task and cancel it to stop.
 - `fetch_delay` (default `2.0` seconds) is the pause between the REST requests of consecutive
   trackables, to avoid HTTP 429 (too many requests) responses.
 - Events without a known message type or `tracker_id` are ignored and logged at debug level
   (`Ignoring event ...`). Supported events and the bodies of REST responses are logged at
   debug level by the `aiotractive.tractive` and `aiotractive.api` loggers.
-- Trackers returned by `client.tracker()` and `client.trackers()` are bound to `client.status`:
+- Trackers returned by `client.tracker()` are bound to `client.status`:
   when a `set_buzzer_active`, `set_led_active` or `set_live_tracking_active` command is
   accepted, the switch state is updated optimistically before the confirming event arrives.
 
