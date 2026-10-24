@@ -17,9 +17,6 @@ jobs:
         with:
           python-version: '3.14'
 
-      - name: Install dependencies
-        run: uv sync --locked
-
       - name: Set package version
         run: |
           tag="${{ github.event.release.tag_name }}"
@@ -27,7 +24,7 @@ jobs:
           sed -i "s/^version = \".*\"$/version = \"${version}\"/" pyproject.toml
 
       - name: Build the package
-        run: uv run --no-sync make dist
+        run: uv build
 
       - name: Publish the package
         uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33  # v1.14.2

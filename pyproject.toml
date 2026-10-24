@@ -29,7 +29,6 @@ urls = { Homepage = "https://github.com/zhulik/aiotractive" }
 [dependency-groups]
 dev = [
     "aiointercept==1.0.0",
-    "build>=1.2.2",
     "prek==0.5.5",
     "pytest==9.1.1",
     "pytest-asyncio==1.4.0",

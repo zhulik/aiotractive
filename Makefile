@@ -14,7 +14,7 @@ test:
 	pytest tests --cov=aiotractive --cov-report=term-missing
 
 dist:
-	python -m build
+	uv build
 	twine check dist/*
 
 .PHONY: ruff ty lint format test dist
