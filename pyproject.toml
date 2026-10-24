@@ -29,13 +29,13 @@ urls = { Homepage = "https://github.com/zhulik/aiotractive" }
 [dependency-groups]
 dev = [
     "aiointercept==1.0.0",
-    "prek==0.5.5",
+    "prek==0.5.7",
     "pytest==9.1.1",
     "pytest-asyncio==1.4.0",
     "pytest-cov==7.1.0",
-    "ruff==0.17.0",
+    "ruff==0.17.1",
     "twine>=6.0.0",
-    "ty==0.0.87",
+    "ty==0.0.90",
 ]
 
 [tool.setuptools.packages.find]
