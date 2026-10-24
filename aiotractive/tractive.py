@@ -9,7 +9,7 @@ import time
 from collections.abc import AsyncIterator, Callable
 from functools import partial
 from types import TracebackType
-from typing import Any
+from typing import Any, Self
 
 from .api import API
 from .channel import Channel
@@ -332,7 +332,7 @@ class Tractive:
         await self.async_stop_listener()
         await self._api.close()
 
-    async def __aenter__(self) -> Tractive:  # noqa: PYI034
+    async def __aenter__(self) -> Self:
         """Async enter."""
         return self
 
