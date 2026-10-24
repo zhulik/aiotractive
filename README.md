@@ -209,7 +209,9 @@ This library is fully typed and includes a `py.typed` marker for [PEP 561](https
 Requires [uv](https://docs.astral.sh/uv/getting-started/installation/).
 
 ```bash
-uv sync
+python3 -m venv .venv
+source .venv/bin/activate
+uv sync --all-groups
 uv run prek install
 ```
 
