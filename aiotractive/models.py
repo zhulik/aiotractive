@@ -130,6 +130,10 @@ def update_tracker_switches(status: TrackerStatus, event: dict[str, Any]) -> Non
         switch_data = event.get(event_key)
         if switch_data is None:
             continue
+        # A pending command still reports the previous state; keep the last
+        # known value until the tracker confirms the change
+        if switch_data.get("pending") and getattr(status, status_key) is not None:
+            continue
 
         active = switch_data.get("active")
         # The API keeps reporting a timed out LED or buzzer as active, with no

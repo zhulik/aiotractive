@@ -302,6 +302,56 @@ def test_update_tracker_switches(
 
 
 @pytest.mark.parametrize(
+    ("event_key", "field", "previous"),
+    [
+        ("buzzer_control", "buzzer", True),
+        ("buzzer_control", "buzzer", False),
+        ("led_control", "led", True),
+        ("led_control", "led", False),
+        ("live_tracking", "live_tracking", True),
+        ("live_tracking", "live_tracking", False),
+    ],
+)
+def test_update_tracker_switches_pending_command(
+    event_key: str,
+    field: str,
+    previous: bool,
+) -> None:
+    """Test that a pending command keeps the last known state until confirmed."""
+    status = TrackerStatus()
+    setattr(status, field, previous)
+    # The API reports the state from before the command while it is pending
+    stale = {"active": not previous, "remaining": 0 if previous else 896}
+
+    update_tracker_switches(status, {event_key: {**stale, "pending": True}})
+    assert getattr(status, field) is previous
+
+    update_tracker_switches(status, {event_key: {**stale, "pending": False}})
+    assert getattr(status, field) is not previous
+
+
+@pytest.mark.parametrize(
+    ("event_key", "field"),
+    [
+        ("buzzer_control", "buzzer"),
+        ("led_control", "led"),
+        ("live_tracking", "live_tracking"),
+    ],
+)
+def test_update_tracker_switches_pending_command_unknown_state(
+    event_key: str,
+    field: str,
+) -> None:
+    """Test that a pending command still fills in a not yet known state."""
+    status = TrackerStatus()
+
+    update_tracker_switches(
+        status, {event_key: {"active": True, "remaining": 896, "pending": True}}
+    )
+    assert getattr(status, field) is True
+
+
+@pytest.mark.parametrize(
     ("event_key", "field", "expired"),
     [
         ("buzzer_control", "buzzer", False),
