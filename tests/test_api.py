@@ -37,7 +37,7 @@ async def test_auth_success(
 
         async with Tractive("test@example.com", "password") as client:
             with caplog.at_level(logging.DEBUG, logger="aiotractive.api"):
-                creds = await client.authenticate()
+                creds = await client._api.authenticate()
 
     assert creds is not None
 
