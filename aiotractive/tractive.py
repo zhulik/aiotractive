@@ -156,6 +156,10 @@ class Tractive:
             update_pet_from_health_overview(
                 self.status.pets.setdefault(pet_id, PetStatus()), data
             )
+            for trackable in self._trackables or []:
+                if trackable.pet_id == pet_id:
+                    trackable.health_available = True
+                    break
             return
 
         tracker_id = event.get("tracker_id")
@@ -239,6 +243,7 @@ class Tractive:
             hw_info = await tracker.hw_info()
             pos_report = await tracker.pos_report()
             health = await self.trackable_object(trackable.pet_id).health_overview()
+            trackable.health_available = health is not None
             update_tracker_from_rest(
                 self.status.trackers.setdefault(trackable.tracker_id, TrackerStatus()),
                 tracker_details,

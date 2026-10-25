@@ -536,3 +536,15 @@ def test_tractive_status_defaults_are_independent() -> None:
     assert first.trackers is not second.trackers
     assert second.trackers == {}
     assert second.pets == {}
+
+
+def test_trackable_health_available_defaults_to_none() -> None:
+    """Test that health availability is unknown until checked."""
+    trackable = Trackable(
+        pet_id="pet_id_123",
+        tracker_id="device_id_123",
+        pet_details=load_fixture("trackable_object"),
+        tracker_details=load_fixture("tracker_details"),
+    )
+
+    assert trackable.health_available is None

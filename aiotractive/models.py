@@ -60,6 +60,8 @@ class Trackable:
     tracker_id: str
     pet_details: dict[str, Any]
     tracker_details: dict[str, Any]
+    # None: unknown, False: API answered 400/403, see TrackableObject.health_overview()
+    health_available: bool | None = None
 
     @property
     def name(self) -> str:

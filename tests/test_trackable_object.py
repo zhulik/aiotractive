@@ -53,13 +53,13 @@ async def test_health_overview_returns_data(
 
 
 @pytest.mark.parametrize("error", [BadRequestError, ForbiddenError])
-async def test_health_overview_unsupported_returns_empty(
+async def test_health_overview_unsupported_returns_none(
     pet: TrackableObject, mock_api: MagicMock, error: type[TractiveError]
 ) -> None:
-    """Test that a pet without health overview (400 or 403) yields an empty dict."""
+    """Test that a pet without health overview (400 or 403) yields None."""
     mock_api.request.side_effect = error()
 
-    assert await pet.health_overview() == {}
+    assert await pet.health_overview() is None
 
 
 @pytest.mark.parametrize("error", [UnauthorizedError, NotFoundError, TractiveError])
