@@ -1,20 +1,22 @@
 version: 2
 enable-beta-ecosystems: true
 
+multi-ecosystem-groups:
+  dev:
+    schedule:
+      interval: "weekly"
+
 updates:
   - package-ecosystem: "uv"
     directory: "/"
     schedule:
       interval: "weekly"
     groups:
-      dev:
+      test:
         patterns:
           - "aiointercept"
-          - "prek"
           - "pytest"
           - "pytest-*"
-          - "ruff"
-          - "ty"
     ignore:
       - dependency-name: "twine"
       - dependency-name: "aiohttp"
@@ -36,3 +38,18 @@ updates:
     groups:
       pre-commit:
         patterns: ["*"]
+
+  - package-ecosystem: "uv"
+    directory: "/"
+    patterns:
+      - "prek"
+      - "ruff"
+      - "ty"
+    multi-ecosystem-group: "dev"
+
+  - package-ecosystem: "pre-commit"
+    directory: "/"
+    patterns:
+      - "*/astral-sh/ruff-pre-commit"
+      - "*/astral-sh/ty-pre-commit"
+    multi-ecosystem-group: "dev"
