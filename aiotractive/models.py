@@ -42,6 +42,10 @@ class PetStatus:
     minutes_night_sleep: int | None = None
     minutes_rest: int | None = None
     weight: int | None = None
+    bark_status: str | None = None
+    resting_heart_rate_status: str | None = None
+    resting_respiratory_rate_status: str | None = None
+    scratch_status: str | None = None
 
 
 @dataclass(slots=True)
@@ -150,6 +154,12 @@ def update_tracker_switches(status: TrackerStatus, event: dict[str, Any]) -> Non
         status.power_saving_zone = hw["power_saving_zone_id"] is not None
 
 
+def _health_status(data: dict[str, Any], key: str) -> str | None:
+    """Return the lowercase status of a health metric, or None if missing."""
+    status: str | None = (data.get(key) or {}).get("status")
+    return status.lower() if status is not None else None
+
+
 def update_pet_from_health_overview(status: PetStatus, data: dict[str, Any]) -> None:
     """Apply a health overview payload to the pet status.
 
@@ -163,6 +173,12 @@ def update_pet_from_health_overview(status: PetStatus, data: dict[str, Any]) -> 
     status.minutes_day_sleep = sleep.get("minutesDaySleep")
     status.minutes_night_sleep = sleep.get("minutesNightSleep")
     status.minutes_rest = sleep.get("minutesCalm")
+    status.bark_status = _health_status(data, "bark")
+    status.resting_heart_rate_status = _health_status(data, "restingHeartRate")
+    status.resting_respiratory_rate_status = _health_status(
+        data, "restingRespiratoryRate"
+    )
+    status.scratch_status = _health_status(data, "scratch")
 
 
 def update_tracker_from_rest(

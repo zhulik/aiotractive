@@ -66,6 +66,10 @@ HEALTH_OVERVIEW: dict[str, Any] = {
     "petId": PET_ID,
     "sleep": {"minutesDaySleep": 100, "minutesNightSleep": 300, "minutesCalm": 122},
     "activity": {"minutesGoal": 200, "minutesActive": 150},
+    "bark": {"status": "NORMAL", "dayOffset": -1},
+    "restingHeartRate": {"status": "ELEVATED", "dayOffset": 0},
+    "restingRespiratoryRate": {"status": "NOT_ENOUGH_DATA_TODAY", "dayOffset": 0},
+    "scratch": {"status": "INFREQUENT", "dayOffset": 0},
 }
 
 FULL_PET_STATUS = PetStatus(
@@ -74,6 +78,10 @@ FULL_PET_STATUS = PetStatus(
     minutes_day_sleep=100,
     minutes_night_sleep=300,
     minutes_rest=122,
+    bark_status="normal",
+    resting_heart_rate_status="elevated",
+    resting_respiratory_rate_status="not_enough_data_today",
+    scratch_status="infrequent",
 )
 
 
