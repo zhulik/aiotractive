@@ -8,5 +8,21 @@
   "activity": {
     "minutesGoal": 200,
     "minutesActive": 150
+  },
+  "bark": {
+    "status": "NORMAL",
+    "dayOffset": -1
+  },
+  "restingHeartRate": {
+    "status": "ELEVATED",
+    "dayOffset": 0
+  },
+  "restingRespiratoryRate": {
+    "status": "NOT_ENOUGH_DATA_TODAY",
+    "dayOffset": 0
+  },
+  "scratch": {
+    "status": "INFREQUENT",
+    "dayOffset": 0
   }
 }

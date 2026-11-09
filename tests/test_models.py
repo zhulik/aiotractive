@@ -403,7 +403,20 @@ def test_update_tracker_switches_power_saving_zone(
 @pytest.mark.parametrize(
     ("data", "expected"),
     [
-        (load_fixture("health_overview"), PetStatus(200, 150, 100, 300, 122)),
+        (
+            load_fixture("health_overview"),
+            PetStatus(
+                daily_goal=200,
+                minutes_active=150,
+                minutes_day_sleep=100,
+                minutes_night_sleep=300,
+                minutes_rest=122,
+                bark_status="normal",
+                resting_heart_rate_status="elevated",
+                resting_respiratory_rate_status="not_enough_data_today",
+                scratch_status="infrequent",
+            ),
+        ),
         (
             {"activity": {"minutesGoal": 200, "minutesActive": 150}},
             PetStatus(200, 150, None, None, None),
@@ -419,13 +432,27 @@ def test_update_tracker_switches_power_saving_zone(
             PetStatus(None, None, 100, 300, 122),
         ),
         ({"activity": None, "sleep": None}, PetStatus()),
+        (
+            {"restingHeartRate": {"status": "CALCULATING_BASELINE"}, "bark": None},
+            PetStatus(resting_heart_rate_status="calculating_baseline"),
+        ),
     ],
 )
 def test_update_pet_from_health_overview(
     data: dict[str, Any], expected: PetStatus
 ) -> None:
     """Test that missing blocks reset the corresponding fields to None."""
-    status = PetStatus(1, 2, 3, 4, 5)
+    status = PetStatus(
+        1,
+        2,
+        3,
+        4,
+        5,
+        bark_status="a",
+        resting_heart_rate_status="b",
+        resting_respiratory_rate_status="c",
+        scratch_status="d",
+    )
 
     update_pet_from_health_overview(status, data)
 
