@@ -87,14 +87,15 @@ async def test_listen_receives_event(channel: Channel, mock_api: MagicMock) -> N
     task = asyncio.create_task(channel._listen())
     await asyncio.sleep(0.1)
     task.cancel()
-    await task
+    with contextlib.suppress(asyncio.CancelledError):
+        await task
 
     events = []
     while not channel._queue.empty():
         events.append(await channel._queue.get())
 
     assert events
-    assert len(events) == 2  # One event + one cancelled event
+    assert len(events) == 1
     event = events[0]
     assert event["event"]["message"] == "test_event"
     assert event["event"]["data"] == {"id": "123"}
@@ -117,7 +118,8 @@ async def test_listen_multiple_events(channel: Channel, mock_api: MagicMock) -> 
     task = asyncio.create_task(channel._listen())
     await asyncio.sleep(0.1)
     task.cancel()
-    await task
+    with contextlib.suppress(asyncio.CancelledError):
+        await task
 
     # The stamp belongs to the open stream only.
     assert channel._last_keep_alive is None
@@ -126,7 +128,7 @@ async def test_listen_multiple_events(channel: Channel, mock_api: MagicMock) -> 
     while not channel._queue.empty():
         events.append(await channel._queue.get())
 
-    assert len(events) == 3  # Two events + one cancelled event
+    assert len(events) == 2
     assert events[0]["event"]["message"] == "tracker_status"
     assert events[1]["event"]["message"] == "position"
 
@@ -152,7 +154,8 @@ async def test_listen_keep_alive(
     await asyncio.sleep(0.1)
     assert channel._last_keep_alive == 2.0
     task.cancel()
-    await task
+    with contextlib.suppress(asyncio.CancelledError):
+        await task
 
     assert channel._last_keep_alive is None
 
@@ -160,11 +163,8 @@ async def test_listen_keep_alive(
     while not channel._queue.empty():
         events.append(await channel._queue.get())
 
-    # Queue should only have the cancelled event, no keep-alive events
-    assert events
-    assert len(events) == 1
-    event = events[0]
-    assert event["type"] == "cancelled"
+    # Keep-alive and handshake messages must not be queued
+    assert not events
 
 
 async def test_listen_handshake(channel: Channel, mock_api: MagicMock) -> None:
@@ -179,17 +179,15 @@ async def test_listen_handshake(channel: Channel, mock_api: MagicMock) -> None:
     task = asyncio.create_task(channel._listen())
     await asyncio.sleep(0.1)
     task.cancel()
-    await task
+    with contextlib.suppress(asyncio.CancelledError):
+        await task
 
     events = []
     while not channel._queue.empty():
         events.append(await channel._queue.get())
 
-    # Queue should only have the cancelled event, no keep-alive events
-    assert events
-    assert len(events) == 1
-    event = events[0]
-    assert event["type"] == "cancelled"
+    # Keep-alive and handshake messages must not be queued
+    assert not events
 
 
 async def test_listen_timeout(channel: Channel, mock_api: MagicMock) -> None:
@@ -213,7 +211,8 @@ async def test_listen_timeout(channel: Channel, mock_api: MagicMock) -> None:
     task = asyncio.create_task(channel._listen())
     await asyncio.sleep(0.1)
     task.cancel()
-    await task
+    with contextlib.suppress(asyncio.CancelledError):
+        await task
 
     assert call_count >= 2
 
@@ -319,7 +318,8 @@ async def test_listen_retry_on_429_client_error(
     task = asyncio.create_task(channel._listen())
     await asyncio.sleep(0.2)
     task.cancel()
-    await task
+    with contextlib.suppress(asyncio.CancelledError):
+        await task
 
     assert call_count >= 2
     assert cast(MagicMock, channel._retry_delay).called
@@ -381,7 +381,8 @@ async def test_listen_on_connected(
     task = asyncio.create_task(channel._listen())
     await asyncio.sleep(0.1)
     task.cancel()
-    await task
+    with contextlib.suppress(asyncio.CancelledError):
+        await task
 
     assert on_connected.call_count == expected_calls
     events_in_queue = []
@@ -402,9 +403,10 @@ async def test_listen_handshake_without_on_connected(
     task = asyncio.create_task(channel._listen())
     await asyncio.sleep(0.1)
     task.cancel()
-    await task
+    with contextlib.suppress(asyncio.CancelledError):
+        await task
 
-    assert (await channel._queue.get())["type"] == "cancelled"
+    assert channel._queue.empty()
 
 
 def assert_internal_tasks_done(channel: Channel) -> None:
@@ -562,7 +564,7 @@ async def test_listen_stream_closed_after_data_reconnects_silently(
 
     await run_listen(channel)
 
-    items = [item for item in drain(channel) if item["type"] != "cancelled"]
+    items = drain(channel)
     assert [item["type"] for item in items] == ["event", "event"]
     assert [item["event"]["id"] for item in items] == ["1", "2"]
     assert on_connected.call_count == 2
@@ -621,7 +623,7 @@ async def test_listen_retry_counter_resets_after_successful_connection(
 
     await run_listen(channel)
 
-    items = [item for item in drain(channel) if item["type"] != "cancelled"]
+    items = drain(channel)
     assert [item["type"] for item in items] == ["event", "event"]
     assert mock_api.retry_delay.call_args_list == [call(1), call(1)]
     assert mock_api.session.request.call_count == 4
@@ -632,30 +634,6 @@ def server_error(status: HTTPStatus) -> ClientResponseError:
     return ClientResponseError(
         request_info=MagicMock(), history=(), status=status, message=status.phrase
     )
-
-
-@pytest.mark.parametrize(
-    "failure",
-    [
-        server_error(HTTPStatus.SERVICE_UNAVAILABLE),
-        TimeoutError(),
-        ServerDisconnectedError(),
-    ],
-)
-async def test_listen_cancelled_during_retry_delay_queues_cancelled(
-    channel: Channel, mock_api: MagicMock, failure: Exception
-) -> None:
-    """Test that cancelling _listen while it waits to retry still reports it."""
-    mock_api.retry_delay.return_value = 10
-    mock_api.session.request.side_effect = failure
-
-    task = asyncio.create_task(channel._listen())
-    await asyncio.sleep(0.1)
-    mock_api.retry_delay.assert_called_once_with(1)
-    task.cancel()
-    await task
-
-    assert [item["type"] for item in drain(channel)] == ["cancelled"]
 
 
 @pytest.mark.parametrize("side_effect", [None, RuntimeError("boom")])

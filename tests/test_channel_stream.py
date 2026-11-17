@@ -194,9 +194,12 @@ async def test_listen_raises_when_reconnects_keep_failing(
     """Consumer gets an error instead of hanging once every reconnect fails."""
     first = _serve_lines_then_close(HANDSHAKE, KEEP_ALIVE, EVENT_1)
     async with stream_env(monkeypatch, first, later) as env:
-        with pytest.raises(TractiveError):
+        with pytest.raises(TractiveError) as exc_info:
             async with asyncio.timeout(BOUND):
                 await _drain(env.channel)
+    # DisconnectedError is a TractiveError too, so this also rules out the
+    # watchdog killing the listener during its retry sleep.
+    assert not isinstance(exc_info.value, DisconnectedError)
 
 
 @pytest.mark.parametrize(
