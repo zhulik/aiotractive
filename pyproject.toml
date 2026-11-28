@@ -33,9 +33,9 @@ dev = [
     "pytest==9.2.0",
     "pytest-asyncio==1.5.0",
     "pytest-cov==7.1.0",
-    "ruff==0.17.5",
+    "ruff==0.17.6",
     "twine>=6.0.0",
-    "ty==0.0.105",
+    "ty==0.0.110",
 ]
 
 [tool.setuptools.packages.find]
